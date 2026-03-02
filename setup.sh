@@ -12,15 +12,19 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
     echo "==== Starting Termux Host Setup ===="
     echo "=========================================="
     
-    # Ensure Termux packages are up to date
-    pkg update -y
+    # Ensure Termux packages are fully upgraded to fix library linkage errors (like curl SSL issues)
+    pkg upgrade -y
     
     # Install proot-distro & essential tools
     pkg install proot-distro wget curl openssh -y
     
     # Install Debian 12
     echo "[*] Installing Debian 12 PRoot..."
-    proot-distro install debian || echo "[*] Debian may already be installed. Continuing..."
+    if [ ! -d "$PREFIX/var/lib/proot-distro/installed-rootfs/debian" ]; then
+        proot-distro install debian
+    else
+        echo "[*] Debian is already installed. Continuing..."
+    fi
     
     # Create the guest setup script
     GUEST_ROOT="$PREFIX/var/lib/proot-distro/installed-rootfs/debian/root"
