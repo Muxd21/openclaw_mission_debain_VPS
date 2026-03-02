@@ -16,7 +16,7 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
     pkg update -y
     
     # Install proot-distro & essential tools
-    pkg install proot-distro wget curl openssh tailscale -y
+    pkg install proot-distro wget curl openssh -y
     
     # Install Debian 12
     echo "[*] Installing Debian 12 PRoot..."
