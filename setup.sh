@@ -20,10 +20,12 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
     
     # Install Debian 12
     echo "[*] Installing Debian 12 PRoot..."
-    proot-distro install debian
+    proot-distro install debian || echo "[*] Debian may already be installed. Continuing..."
     
     # Create the guest setup script
-    GUEST_SCRIPT="$PREFIX/var/lib/proot-distro/installed-rootfs/debian/root/guest_setup.sh"
+    GUEST_ROOT="$PREFIX/var/lib/proot-distro/installed-rootfs/debian/root"
+    mkdir -p "$GUEST_ROOT"
+    GUEST_SCRIPT="$GUEST_ROOT/guest_setup.sh"
     cat << 'EOF' > "$GUEST_SCRIPT"
 #!/bin/bash
 set -e
