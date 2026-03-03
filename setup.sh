@@ -24,8 +24,10 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
         echo "[⚠️] Tailscale pkg install failed. Downloading prebuilt Android binary..."
         wget -q "https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/builds/tailscale-arm64.tar.gz.part-aa" -O tailscale.tar.gz
         tar -xzf tailscale.tar.gz
-        mv tailscale $PREFIX/bin/tailscale
-        chmod +x $PREFIX/bin/tailscale
+        mv tailscale $PREFIX/bin/tailscale || true
+        chmod +x $PREFIX/bin/tailscale || true
+        mv tailscaled $PREFIX/bin/tailscaled 2>/dev/null || true
+        chmod +x $PREFIX/bin/tailscaled 2>/dev/null || true
         rm tailscale.tar.gz
         echo "[✔] Prebuilt Tailscale installed successfully!"
     }
