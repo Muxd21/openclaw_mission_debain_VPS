@@ -103,7 +103,11 @@ jobs:
       - name: Build Mission Control (ARM64)
         run: |
           mkdir -p artifacts
-          git clone --depth 1 https://github.com/builderz-labs/mission-control.git mc-build
+          # Configure git to prevent HTTP 500 RPC failed errors
+          git config --global http.postBuffer 1048576000
+          git config --global http.version HTTP/1.1
+          # Attempt shallow clone first, fallback to full clone if shallow pack fails
+          git clone --depth 1 https://github.com/builderz-labs/mission-control.git mc-build || git clone https://github.com/builderz-labs/mission-control.git mc-build
           # Strip llama BEFORE docker (works on host since it's just JSON editing)
           bash /tmp/strip-llama.sh "$(pwd)/mc-build"
           docker run --rm --privileged --platform linux/arm64 \
@@ -123,7 +127,7 @@ jobs:
 
       - name: Build OpenClaw (ARM64)
         run: |
-          git clone --depth 1 https://github.com/openclaw/openclaw.git oc-build
+          git clone --depth 1 https://github.com/openclaw/openclaw.git oc-build || git clone https://github.com/openclaw/openclaw.git oc-build
           # Strip llama from ALL workspace package.json files BEFORE docker
           bash /tmp/strip-llama.sh "$(pwd)/oc-build"
           docker run --rm --privileged --platform linux/arm64 \
@@ -143,7 +147,7 @@ jobs:
 
       - name: Build Perplexica (ARM64)
         run: |
-          git clone --depth 1 https://github.com/ItzCrazyKns/Perplexica.git px-build
+          git clone --depth 1 https://github.com/ItzCrazyKns/Perplexica.git px-build || git clone https://github.com/ItzCrazyKns/Perplexica.git px-build
           # Strip llama BEFORE docker
           bash /tmp/strip-llama.sh "$(pwd)/px-build"
           docker run --rm --privileged --platform linux/arm64 \
