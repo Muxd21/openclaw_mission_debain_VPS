@@ -86,8 +86,8 @@ jobs:
             -w /app \
             golang:latest \
             /bin/bash -c '\
-              go build -buildvcs=false -o tailscale ./cmd/tailscale && \
-              go build -buildvcs=false -o tailscaled ./cmd/tailscaled && \
+              go build -o tailscale ./cmd/tailscale && \
+              go build -o tailscaled ./cmd/tailscaled && \
               tar -czf tailscale-arm64.tar.gz tailscale tailscaled \
             '
           split -b 50M ts-build/tailscale-arm64.tar.gz ./artifacts/tailscale-arm64.tar.gz.part-
