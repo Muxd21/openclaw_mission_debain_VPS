@@ -18,16 +18,41 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
     # Install proot-distro, essential tools & socat for bridging
     pkg install proot-distro wget curl openssh socat -y
     
+    # Attempt to install Tailscale; if it fails, download our precompiled ARM64 Android binary
+    echo "[*] Installing Tailscale..."
+    pkg install tailscale -y || {
+        echo "[⚠️] Tailscale pkg install failed. Downloading prebuilt Android binary..."
+        wget -q "https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/builds/tailscale-arm64.tar.gz.part-aa" -O tailscale.tar.gz
+        tar -xzf tailscale.tar.gz
+        mv tailscale $PREFIX/bin/tailscale || true
+        chmod +x $PREFIX/bin/tailscale || true
+        mv tailscaled $PREFIX/bin/tailscaled 2>/dev/null || true
+        chmod +x $PREFIX/bin/tailscaled 2>/dev/null || true
+        rm tailscale.tar.gz
+        echo "[✔] Prebuilt Tailscale installed successfully!"
+    }
+    
     # Auto-restart bridges on Termux host
     setup_bridge() {
         pkill socat || true
-        socat TCP4-LISTEN:2222,reuseaddr,fork TCP4:127.0.0.1:2222 &
-        socat TCP4-LISTEN:3000,reuseaddr,fork TCP4:127.0.0.1:3000 &
-        socat TCP4-LISTEN:3001,reuseaddr,fork TCP4:127.0.0.1:3001 &
-        socat TCP4-LISTEN:3010,reuseaddr,fork TCP4:127.0.0.1:3010 &
-        socat TCP4-LISTEN:3011,reuseaddr,fork TCP4:127.0.0.1:3011 &
+        socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
+        socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
+        socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
+        socat TCP4-LISTEN:3003,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3003 &
     }
     setup_bridge
+
+    # Create persistence script for bridges on Termux host
+    cat << 'BRIDGE' > ~/vps-bridge.sh
+#!/data/data/com.termux/files/usr/bin/bash
+pkill socat || true
+socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
+socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
+socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
+socat TCP4-LISTEN:3003,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3003 &
+echo "Network bridges restarted successfully."
+BRIDGE
+    chmod +x ~/vps-bridge.sh
 
     # Install Debian 12
     echo "[*] Installing Debian 12 PRoot..."
@@ -57,7 +82,7 @@ echo "nameserver 8.8.8.8" >> /etc/resolv.conf
 # Update and install basic tools
 echo "[*] Installing system dependencies..."
 apt update && apt upgrade -y
-apt install -y curl git nano wget openssh-server build-essential iptables sudo procps ca-certificates
+apt install -y curl git nano wget openssh-server build-essential sudo procps ca-certificates netcat-openbsd
 
 # Setup SSH Server in PRoot (VPS Style)
 echo "[*] Configuring SSH Server on Port 2222..."
@@ -80,9 +105,40 @@ npm install -g pnpm pm2 typescript tsx
 echo "export NEXT_TURBO=0" >> /root/.bashrc
 echo "export NEXT_TELEMETRY_DISABLED=1" >> /root/.bashrc
 echo "export HOST=0.0.0.0" >> /root/.bashrc
+echo "export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1" >> /root/.bashrc
+
+# Implement Bionic Bypass for Node.js stability on Android
+cat > /root/.node_bypass.js << 'BYPASS'
+const os = require('os');
+const originalNetworkInterfaces = os.networkInterfaces;
+os.networkInterfaces = function() {
+  try {
+    const interfaces = originalNetworkInterfaces.call(os);
+    if (interfaces && Object.keys(interfaces).length > 0) {
+      return interfaces;
+    }
+  } catch (e) {}
+  return {
+    lo: [{
+      address: '127.0.0.1',
+      netmask: '255.0.0.0',
+      family: 'IPv4',
+      mac: '00:00:00:00:00:00',
+      internal: true,
+      cidr: '127.0.0.1/8'
+    }]
+  };
+};
+BYPASS
+echo 'export NODE_OPTIONS="--require /root/.node_bypass.js"' >> /root/.bashrc
+
 export NEXT_TURBO=0
 export NEXT_TELEMETRY_DISABLED=1
 export HOST=0.0.0.0
+export NODE_OPTIONS="--require /root/.node_bypass.js"
+export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1
+
+# (llama removal hack deleted. using pure NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 environment variable)
 
 REPO_BASE="https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/builds"
 
@@ -127,7 +183,8 @@ cd /root
 # 1. OpenClaw
 if ! binary_install "openclaw"; then
     if [ ! -d "openclaw" ]; then git clone --depth 1 https://github.com/openclaw/openclaw.git; fi
-    cd openclaw && npm install --legacy-peer-deps && npm run build || true
+    cd openclaw && npm install --legacy-peer-deps --ignore-scripts=false && npm run build || true
+    rm -rf /root/openclaw/node_modules/node-llama-cpp 2>/dev/null || true
 fi
 
 # 2. Mission Control
@@ -144,10 +201,7 @@ if ! binary_install "perplexica"; then
     cd perplexica && npm install --legacy-peer-deps && npm run build
 fi
 
-# 4. Meilisearch (Required for Perplexica)
-echo "[*] Installing Meilisearch..."
-apt install -y meilisearch || (wget https://github.com/meilisearch/meilisearch/releases/download/v1.12.1/meilisearch-linux-arm64 -O /usr/local/bin/meilisearch && chmod +x /usr/local/bin/meilisearch)
-
+# (Meilisearch removed, Perplexica now uses SearXNG)
 # --- PRoot Specific Fixes ---
 echo "[*] Finalizing configuration..."
 # Always ensure binding 0.0.0.0 is enforced in package.json
@@ -164,16 +218,11 @@ pm2 start "npm run start -- --port 3000" --name mission-control --cwd /root/miss
 # OpenClaw (Port 3001)
 pm2 start "npm run gateway -- --port 3001" --name openclaw --cwd /root/openclaw --env HOST=0.0.0.0
 
-# Perplexica Backend (Port 3010) & Frontend (Port 3011)
+# Perplexica (Unified, Port 3003)
 cd /root/perplexica
-if [ ! -f ".json" ]; then
-    echo '{"PORT": 3010, "MEILI_HOST": "http://127.0.0.1:7700"}' > config.json
-fi
-pm2 start "npm run start:backend" --name px-backend --cwd /root/perplexica
-pm2 start "npm run start:frontend" --name px-frontend --cwd /root/perplexica --env PORT=3011
+pm2 start "npm run start" --name perplexica --cwd /root/perplexica --env PORT=3003,HOST=0.0.0.0
 
-# Meilisearch
-pm2 start "meilisearch --http-addr 127.0.0.1:7700" --name meilisearch
+
 
 pm2 save
 
@@ -181,27 +230,35 @@ pm2 save
 echo "[*] Creating /root/sync.sh command..."
 cat << 'SYNC' > /root/sync.sh
 #!/bin/bash
+set -e
+export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1
 echo "=========================================="
 echo "==== Starting Perfect Sync & Update   ===="
 echo "=========================================="
+
+# (llama removal hack deleted. using pure NODE_LLAMA_CPP_SKIP_POSTINSTALL=1)
 
 # Update System Packages optionally
 # apt update && apt upgrade -y
 
 echo "-> Syncing OpenClaw..."
 cd /root/openclaw
+git stash 2>/dev/null || true
 git pull
 npm install --legacy-peer-deps
 npm run build || true
+rm -rf /root/openclaw/node_modules/node-llama-cpp 2>/dev/null || true
 
 echo "-> Syncing Mission Control..."
 cd /root/mission-control
+git stash 2>/dev/null || true
 git pull
 npm install --legacy-peer-deps
 npm run build
 
 echo "-> Syncing Perplexica..."
 cd /root/perplexica
+git stash 2>/dev/null || true
 git pull
 npm install --legacy-peer-deps
 npm run build
@@ -260,7 +317,7 @@ EOF
     echo "APPS ACCESS:"
     echo "  Mission Control : http://<YOUR_PHONE_TAILSCALE_IP>:3000"
     echo "  OpenClaw        : http://<YOUR_PHONE_TAILSCALE_IP>:3001"
-    echo "  Perplexica      : http://<YOUR_PHONE_TAILSCALE_IP>:3011"
+    echo "  Perplexica      : http://<YOUR_PHONE_TAILSCALE_IP>:3003"
     echo "=========================================="
     exit 0
 fi

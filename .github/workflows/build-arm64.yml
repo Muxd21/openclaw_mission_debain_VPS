@@ -21,36 +21,76 @@ jobs:
       - name: Build Mission Control (ARM64)
         run: |
           mkdir -p artifacts
-          git clone --depth 1 https://github.com/builderz-labs/mission-control.git mc-build
+          # Configure git to prevent HTTP 500 RPC failed errors
+          git config --global http.postBuffer 1048576000
+          git config --global http.version HTTP/1.1
+          # Attempt shallow clone first, fallback to full clone if shallow pack fails
+          git clone --depth 1 https://github.com/builderz-labs/mission-control.git mc-build || git clone https://github.com/builderz-labs/mission-control.git mc-build
           docker run --rm --privileged --platform linux/arm64 \
             -v $(pwd)/mc-build:/app \
             -w /app \
-            arm64v8/node:22-bullseye \
-            /bin/bash -c "npm install -g pnpm && npm install --legacy-peer-deps && npm run build && tar -czf mission-control-arm64.tar.gz .next node_modules package.json"
+            arm64v8/node:22-bookworm \
+            /bin/bash -c '\
+              export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 && \
+              export NEXT_TELEMETRY_DISABLED=1 && \
+              npm install -g pnpm && \
+              npm install --legacy-peer-deps && \
+              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null; \
+              npm run build && \
+              tar -czf mission-control-arm64.tar.gz .next node_modules package.json \
+            '
           # Split into 50MB chunks to bypass GitHub limit
           split -b 50M mc-build/mission-control-arm64.tar.gz ./artifacts/mission-control-arm64.tar.gz.part-
 
       - name: Build OpenClaw (ARM64)
         run: |
-          git clone --depth 1 https://github.com/openclaw/openclaw.git oc-build
+          git clone --depth 1 https://github.com/openclaw/openclaw.git oc-build || git clone https://github.com/openclaw/openclaw.git oc-build
           docker run --rm --privileged --platform linux/arm64 \
             -v $(pwd)/oc-build:/app \
             -w /app \
-            arm64v8/node:22-bullseye \
-            /bin/bash -c "npm install -g pnpm && pnpm install --no-frozen-lockfile && pnpm build || true && tar -czf openclaw-arm64.tar.gz packages node_modules package.json"
+            arm64v8/node:22-bookworm \
+            /bin/bash -c '\
+              export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 && \
+              npm install -g pnpm && \
+              pnpm install --no-frozen-lockfile && \
+              rm -rf node_modules/.pnpm/node-llama-cpp* node_modules/node-llama-cpp 2>/dev/null || true; \
+              find /app -path "*/node_modules/node-llama-cpp" -type d -exec rm -rf {} + 2>/dev/null || true; \
+              pnpm build || true && \
+              tar -czf openclaw-arm64.tar.gz packages node_modules package.json \
+            '
           # Split into 50MB chunks
           split -b 50M oc-build/openclaw-arm64.tar.gz ./artifacts/openclaw-arm64.tar.gz.part-
 
       - name: Build Perplexica (ARM64)
         run: |
-          git clone --depth 1 https://github.com/ItzCrazyKns/Perplexica.git px-build
+          git clone --depth 1 https://github.com/ItzCrazyKns/Perplexica.git px-build || git clone https://github.com/ItzCrazyKns/Perplexica.git px-build
           docker run --rm --privileged --platform linux/arm64 \
             -v $(pwd)/px-build:/app \
             -w /app \
-            arm64v8/node:22-bullseye \
-            /bin/bash -c "npm install --legacy-peer-deps && npm run build && tar -czf perplexica-arm64.tar.gz .next node_modules package.json dist"
+            arm64v8/node:22-bookworm \
+            /bin/bash -c '\
+              export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 && \
+              npm install --legacy-peer-deps && \
+              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null; \
+              npm run build && \
+              tar -czf perplexica-arm64.tar.gz .next node_modules package.json \
+            '
           # Split into 50MB chunks
           split -b 50M px-build/perplexica-arm64.tar.gz ./artifacts/perplexica-arm64.tar.gz.part-
+
+      - name: Build Tailscale CLI (ARM64)
+        run: |
+          git clone --depth 1 https://github.com/anasfanani/tailscale-android-cli.git ts-build || git clone https://github.com/anasfanani/tailscale-android-cli.git ts-build
+          docker run --rm --privileged --platform linux/arm64 \
+            -v $(pwd)/ts-build:/app \
+            -w /app \
+            golang:latest \
+            /bin/bash -c '\
+              go build -buildvcs=false -o tailscale ./cmd/tailscale && \
+              go build -buildvcs=false -o tailscaled ./cmd/tailscaled && \
+              tar -czf tailscale-arm64.tar.gz tailscale tailscaled \
+            '
+          split -b 50M ts-build/tailscale-arm64.tar.gz ./artifacts/tailscale-arm64.tar.gz.part-
 
       - name: Deploy to Builds Branch
         uses: peaceiris/actions-gh-pages@v3
