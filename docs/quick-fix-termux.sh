@@ -26,15 +26,15 @@ echo "[*] Starting socat bridges on all ports..."
 socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
 socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
 socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
-socat TCP4-LISTEN:3010,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3010 &
-socat TCP4-LISTEN:3011,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3011 &
+socat TCP4-LISTEN:3002,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3002 &
+socat TCP4-LISTEN:3003,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3003 &
 
 echo "[✓] Bridges started successfully"
 
 # Step 5: Verify bridges are listening
 echo ""
 echo "=== Verifying Port Status ===="
-for port in 2222 3000 3001 3010 3011; do
+for port in 2222 3000 3001 3002 3003; do
     if ss -tlnp | grep -q ":${port} "; then
         echo "[✓] Port $port is LISTENING"
     else
@@ -61,8 +61,8 @@ iptables -F
 iptables -A FORWARD -i eth0 -p tcp --dport 2222 -j ACCEPT
 iptables -A FORWARD -i eth0 -p tcp --dport 3000 -j ACCEPT
 iptables -A FORWARD -i eth0 -p tcp --dport 3001 -j ACCEPT
-iptables -A FORWARD -i eth0 -p tcp --dport 3010 -j ACCEPT
-iptables -A FORWARD -i eth0 -p tcp --dport 3011 -j ACCEPT
+iptables -A FORWARD -i eth0 -p tcp --dport 3002 -j ACCEPT
+iptables -A FORWARD -i eth0 -p tcp --dport 3003 -j ACCEPT
 
 # Save rules
 iptables-save > /etc/iptables.rules
@@ -84,7 +84,7 @@ echo "[✓] Services started in Debian PRoot"
 echo ""
 echo "=== Final Status Check ===="
 echo "Host Ports:"
-ss -tlnp | grep -E "(2222|3000|3001|3010|3011)" || echo "No ports found"
+ss -tlnp | grep -E "(2222|3000|3001|3002|3003)" || echo "No ports found"
 
 echo ""
 echo "Inside PRoot:"
@@ -99,8 +99,8 @@ timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/3000" 2>/dev/null && echo "[✓] Po
 echo "Testing port 3001 (OpenClaw)..."
 timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/3001" 2>/dev/null && echo "[✓] Port 3001 is reachable" || echo "[✗] Port 3001 not responding"
 
-echo "Testing port 3011 (Perplexica)..."
-timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/3011" 2>/dev/null && echo "[✓] Port 3011 is reachable" || echo "[✗] Port 3011 not responding"
+echo "Testing port 3003 (Perplexica)..."
+timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/3003" 2>/dev/null && echo "[✓] Port 3003 is reachable" || echo "[✗] Port 3003 not responding"
 
 echo ""
 echo "=========================================="
@@ -113,7 +113,7 @@ echo "2. Connect your PC to Tailscale on another device"
 echo "3. Access services via Tailscale DNS:"
 echo "   - Mission Control: http://<PHONE>.tail5a917d.ts.net:3000"
 echo "   - OpenClaw:       http://<PHONE>.tail5a917d.ts.net:3001"
-echo "   - Perplexica:     http://<PHONE>.tail5a917d.ts.net:3011"
+echo "   - Perplexica:     http://<PHONE>.tail5a917d.ts.net:3003"
 echo "   - VS Code SSH:    ssh -p 2222 root@<PHONE>.tail5a917d.ts.net"
 echo ""
 echo "If ports still timeout, run the diagnostic script:"

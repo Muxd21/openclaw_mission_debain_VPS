@@ -26,7 +26,7 @@ pkg upgrade -y && pkg install wget -y && wget -qO- https://raw.githubusercontent
 - `Restart Bridges (Termux Host)`: `~/vps-bridge.sh`
 - `Mission Control`: `http://<PHONE_IP>:3000`
 - `OpenClaw`: `http://<PHONE_IP>:3001`
-- `Perplexica`: `http://<PHONE_IP>:3011`
+- `Perplexica`: `http://<PHONE_IP>:3003`
 
 ---
 

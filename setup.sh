@@ -25,8 +25,8 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
         socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
         socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
         socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
-        socat TCP4-LISTEN:3010,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3010 &
-        socat TCP4-LISTEN:3011,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3011 &
+        socat TCP4-LISTEN:3002,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3002 &
+        socat TCP4-LISTEN:3003,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3003 &
     }
     setup_bridge
 
@@ -37,8 +37,8 @@ pkill socat || true
 socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
 socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
 socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
-socat TCP4-LISTEN:3010,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3010 &
-socat TCP4-LISTEN:3011,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3011 &
+socat TCP4-LISTEN:3002,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3002 &
+socat TCP4-LISTEN:3003,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3003 &
 echo "Network bridges restarted successfully."
 BRIDGE
     chmod +x ~/vps-bridge.sh
@@ -286,13 +286,13 @@ pm2 start "npm run start -- --port 3000" --name mission-control --cwd /root/miss
 # OpenClaw (Port 3001)
 pm2 start "npm run gateway -- --port 3001" --name openclaw --cwd /root/openclaw --env HOST=0.0.0.0
 
-# Perplexica Backend (Port 3010) & Frontend (Port 3011)
+# Perplexica Backend (Port 3002) & Frontend (Port 3003)
 cd /root/perplexica
 if [ ! -f "config.json" ]; then
-    echo '{"PORT": 3010, "MEILI_HOST": "http://127.0.0.1:7700"}' > config.json
+    echo '{"PORT": 3002, "MEILI_HOST": "http://127.0.0.1:7700"}' > config.json
 fi
 pm2 start "npm run start:backend" --name px-backend --cwd /root/perplexica
-pm2 start "npm run start:frontend" --name px-frontend --cwd /root/perplexica --env PORT=3011
+pm2 start "npm run start:frontend" --name px-frontend --cwd /root/perplexica --env PORT=3003
 
 # Meilisearch
 pm2 start "meilisearch --http-addr 127.0.0.1:7700" --name meilisearch
@@ -434,7 +434,7 @@ EOF
     echo "APPS ACCESS:"
     echo "  Mission Control : http://<YOUR_PHONE_TAILSCALE_IP>:3000"
     echo "  OpenClaw        : http://<YOUR_PHONE_TAILSCALE_IP>:3001"
-    echo "  Perplexica      : http://<YOUR_PHONE_TAILSCALE_IP>:3011"
+    echo "  Perplexica      : http://<YOUR_PHONE_TAILSCALE_IP>:3003"
     echo "=========================================="
     exit 0
 fi

@@ -29,7 +29,7 @@ ss -tlnp 2>/dev/null | grep -E "(LISTEN|socat)" || netstat -tlnp 2>/dev/null | g
 # Check each port individually
 echo ""
 echo "[CHECK 3b] Individual Port Status:"
-for port in 2222 3000 3001 3010 3011; do
+for port in 2222 3000 3001 3002 3003; do
     if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
         echo "   [✓] Port $port is LISTENING on host"
     else
@@ -88,7 +88,7 @@ ip link show 2>/dev/null | grep -E "(eth0|wlan|lo)" || ifconfig 2>/dev/null | he
 # Check 8: Test Local Connectivity
 echo ""
 echo "[CHECK 8] Local Connectivity Tests"
-for port in 3000 3001 3011; do
+for port in 3000 3001 3003; do
     if timeout 1 bash -c "echo > /dev/tcp/127.0.0.1/$port" 2>/dev/null; then
         echo "   [✓] localhost:$port is reachable"
     else
@@ -124,8 +124,8 @@ if ! ss -tlnp 2>/dev/null | grep ":3001 " >/dev/null; then
     issues=$((issues + 1))
 fi
 
-if ! ss -tlnp 2>/dev/null | grep ":3011 " >/dev/null; then
-    echo "- [ERROR] Port 3011 not listening"
+if ! ss -tlnp 2>/dev/null | grep ":3003 " >/dev/null; then
+    echo "- [ERROR] Port 3003 not listening"
     issues=$((issues + 1))
 fi
 

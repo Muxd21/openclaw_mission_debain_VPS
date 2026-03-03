@@ -1,4 +1,4 @@
-# 🔧 Fix: Tailscale Port Connection Issues (3000, 3001, 3011, 2222)
+# 🔧 Fix: Tailscale Port Connection Issues (3000, 3001, 3003, 2222)
 
 ## Problem Summary
 You're getting **timeout errors** when accessing ports through Tailscale. This is caused by:
@@ -35,7 +35,7 @@ echo "nameserver 8.8.8.8" >> /etc/resolv.conf
 # Add iptables rules for port forwarding
 iptables -A FORWARD -i eth0 -p tcp --dport 3000 -j ACCEPT
 iptables -A FORWARD -i eth0 -p tcp --dport 3001 -j ACCEPT
-iptables -A FORWARD -i eth0 -p tcp --dport 3011 -j ACCEPT
+iptables -A FORWARD -i eth0 -p tcp --dport 3003 -j ACCEPT
 iptables -A FORWARD -i eth0 -p tcp --dport 2222 -j ACCEPT
 iptables-save > /etc/iptables.rules
 ```
@@ -49,8 +49,8 @@ pkill socat || true
 socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
 socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
 socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
-socat TCP4-LISTEN:3010,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3010 &
-socat TCP4-LISTEN:3011,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3011 &
+socat TCP4-LISTEN:3002,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3002 &
+socat TCP4-LISTEN:3003,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3003 &
 
 # Verify bridges are running
 ps aux | grep socat
@@ -96,7 +96,7 @@ ss -tlnp 2>/dev/null || netstat -tlnp
 # Check if bridges are bound to correct IPs
 echo ""
 echo "=== Checking Bridge Bind Addresses ===="
-for port in 2222 3000 3001 3010 3011; do
+for port in 2222 3000 3001 3002 3003; do
     if ss -tlnp | grep -q ":${port} "; then
         echo "[✓] Port $port is listening"
     else
@@ -150,8 +150,8 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ]; then
         socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
         socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
         socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
-        socat TCP4-LISTEN:3010,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3010 &
-        socat TCP4-LISTEN:3011,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3011 &
+        socat TCP4-LISTEN:3002,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3002 &
+        socat TCP4-LISTEN:3003,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3003 &
     }
     setup_bridge
 
@@ -185,8 +185,8 @@ iptables -F
 iptables -A FORWARD -i eth0 -p tcp --dport 2222 -j ACCEPT
 iptables -A FORWARD -i eth0 -p tcp --dport 3000 -j ACCEPT
 iptables -A FORWARD -i eth0 -p tcp --dport 3001 -j ACCEPT
-iptables -A FORWARD -i eth0 -p tcp --dport 3010 -j ACCEPT
-iptables -A FORWARD -i eth0 -p tcp --dport 3011 -j ACCEPT
+iptables -A FORWARD -i eth0 -p tcp --dport 3002 -j ACCEPT
+iptables -A FORWARD -i eth0 -p tcp --dport 3003 -j ACCEPT
 iptables-save > /etc/iptables.rules
 
 # Update and install basic tools
@@ -288,10 +288,10 @@ pm2 start "npm run start -- --port 3000" --name mission-control --cwd /root/miss
 pm2 start "npm run gateway -- --port 3001" --name openclaw --cwd /root/openclaw --env HOST=0.0.0.0
 cd /root/perplexica
 if [ ! -f ".json" ]; then
-    echo '{"PORT": 3010, "MEILI_HOST": "http://127.0.0.1:7700"}' > config.json
+    echo '{"PORT": 3002, "MEILI_HOST": "http://127.0.0.1:7700"}' > config.json
 fi
 pm2 start "npm run start:backend" --name px-backend --cwd /root/perplexica
-pm2 start "npm run start:frontend" --name px-frontend --cwd /root/perplexica --env PORT=3011
+pm2 start "npm run start:frontend" --name px-frontend --cwd /root/perplexica --env PORT=3003
 
 pm2 start "meilisearch --http-addr 127.0.0.1:7700" --name meilisearch
 
@@ -357,7 +357,7 @@ EOF
     echo "APPS ACCESS THROUGH TAILSCALE:"
     echo "  Mission Control : http://<PHONE>.tail5a917d.ts.net:3000"
     echo "  OpenClaw        : http://<PHONE>.tail5a917d.ts.net:3001"
-    echo "  Perplexica      : http://<PHONE>.tail5a917d.ts.net:3011"
+    echo "  Perplexica      : http://<PHONE>.tail5a917d.ts.net:3003"
     echo "=========================================="
     exit 0
 fi
