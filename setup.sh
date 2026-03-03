@@ -129,7 +129,7 @@ export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1
 
 # ===== STRIP LLAMA.CPP FUNCTION =====
 # Nuclear removal of node-llama-cpp from any project (including pnpm monorepos).
-# Handles transitive deps, workspace sub-packages, lockfiles, and postinstall scripts.
+# Handles onlyBuiltDependencies vs neverBuiltDependencies conflict.
 strip_llama_cpp() {
     local PROJECT_DIR="$1"
     echo "[🔧] Stripping node-llama-cpp from ${PROJECT_DIR}..."
@@ -150,37 +150,50 @@ strip_llama_cpp() {
         " 2>/dev/null || true
     done
 
-    # 2. Inject pnpm.neverBuiltDependencies + overrides into root package.json
-    #    This blocks postinstall even if node-llama-cpp comes in as a transitive dep
+    # 2. Handle pnpm build config (detect whitelist vs blacklist mode)
     if [ -f "${PROJECT_DIR}/package.json" ]; then
         node -e "
             const fs = require('fs');
             const pkgPath = '${PROJECT_DIR}/package.json';
             const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
             if (!pkg.pnpm) pkg.pnpm = {};
-            if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
-            if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) {
-                pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
+            // If onlyBuiltDependencies exists (whitelist), remove llama from it
+            if (pkg.pnpm.onlyBuiltDependencies) {
+                pkg.pnpm.onlyBuiltDependencies = pkg.pnpm.onlyBuiltDependencies.filter(d => d !== 'node-llama-cpp');
+                console.log('  [✔] Removed from onlyBuiltDependencies whitelist');
+            } else {
+                // No whitelist, safe to use blacklist
+                if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
+                if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) {
+                    pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
+                }
+                console.log('  [✔] Added to neverBuiltDependencies blacklist');
             }
+            // Override to local stub
             if (!pkg.pnpm.overrides) pkg.pnpm.overrides = {};
-            pkg.pnpm.overrides['node-llama-cpp'] = '0.0.0-skip';
+            pkg.pnpm.overrides['node-llama-cpp'] = 'link:./llama-stub';
             if (!pkg.overrides) pkg.overrides = {};
-            pkg.overrides['node-llama-cpp'] = '0.0.0-skip';
+            pkg.overrides['node-llama-cpp'] = 'link:./llama-stub';
             fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');
-            console.log('  [✔] Injected neverBuiltDependencies + overrides');
+            console.log('  [✔] Injected pnpm config + overrides');
         " 2>/dev/null || true
     fi
 
-    # 3. Clean pnpm-lock.yaml of any llama references
+    # 3. Create a tiny stub package for the override to resolve to
+    mkdir -p "${PROJECT_DIR}/llama-stub"
+    echo '{"name":"node-llama-cpp","version":"0.0.0","description":"stub"}' > "${PROJECT_DIR}/llama-stub/package.json"
+    echo 'module.exports = {};' > "${PROJECT_DIR}/llama-stub/index.js"
+
+    # 4. Clean pnpm-lock.yaml of any llama references
     if [ -f "${PROJECT_DIR}/pnpm-lock.yaml" ]; then
         sed -i '/node-llama-cpp/d' "${PROJECT_DIR}/pnpm-lock.yaml" 2>/dev/null || true
         echo "  [✔] Cleaned pnpm-lock.yaml"
     fi
 
-    # 4. Create .npmrc to block scripts for node-llama-cpp
+    # 5. Create .npmrc to block scripts for node-llama-cpp
     echo 'node-llama-cpp:ignore-scripts=true' >> "${PROJECT_DIR}/.npmrc"
 
-    # 5. Delete any existing node-llama-cpp installations
+    # 6. Delete any existing node-llama-cpp installations
     rm -rf "${PROJECT_DIR}/node_modules/node-llama-cpp" 2>/dev/null || true
     rm -rf "${PROJECT_DIR}/node_modules/.pnpm/node-llama-cpp"* 2>/dev/null || true
     find "${PROJECT_DIR}" -path "*/node_modules/node-llama-cpp" -type d -exec rm -rf {} + 2>/dev/null || true
@@ -296,7 +309,7 @@ echo "=========================================="
 echo "==== Starting Perfect Sync & Update   ===="
 echo "=========================================="
 
-# Nuclear removal of node-llama-cpp (handles monorepos + transitive deps)
+# Nuclear removal of node-llama-cpp (handles monorepos + onlyBuiltDependencies conflicts)
 strip_llama_cpp() {
     local PROJECT_DIR="$1"
     # Strip from ALL package.json files (root + workspaces)
@@ -311,18 +324,26 @@ strip_llama_cpp() {
             if (c) fs.writeFileSync('$pkgfile', JSON.stringify(pkg, null, 2) + '\\n');
         " 2>/dev/null || true
     done
-    # Inject pnpm.neverBuiltDependencies + overrides
+    # Handle pnpm config (detect whitelist vs blacklist)
     node -e "
         const fs = require('fs');
         const p = '${PROJECT_DIR}/package.json';
         const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
         if (!pkg.pnpm) pkg.pnpm = {};
-        if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
-        if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
+        if (pkg.pnpm.onlyBuiltDependencies) {
+            pkg.pnpm.onlyBuiltDependencies = pkg.pnpm.onlyBuiltDependencies.filter(d => d !== 'node-llama-cpp');
+        } else {
+            if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
+            if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
+        }
         if (!pkg.pnpm.overrides) pkg.pnpm.overrides = {};
-        pkg.pnpm.overrides['node-llama-cpp'] = '0.0.0-skip';
+        pkg.pnpm.overrides['node-llama-cpp'] = 'link:./llama-stub';
         fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\\n');
     " 2>/dev/null || true
+    # Create stub package
+    mkdir -p "${PROJECT_DIR}/llama-stub"
+    echo '{"name":"node-llama-cpp","version":"0.0.0"}' > "${PROJECT_DIR}/llama-stub/package.json"
+    echo 'module.exports = {};' > "${PROJECT_DIR}/llama-stub/index.js"
     # Clean lockfile + nuke installed dirs
     sed -i '/node-llama-cpp/d' "${PROJECT_DIR}/pnpm-lock.yaml" 2>/dev/null || true
     echo 'node-llama-cpp:ignore-scripts=true' >> "${PROJECT_DIR}/.npmrc" 2>/dev/null || true

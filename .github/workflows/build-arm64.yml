@@ -46,36 +46,54 @@ jobs:
             " 2>/dev/null || true
           done
 
-          # 2. Inject pnpm.neverBuiltDependencies into root package.json (blocks postinstall even for transitive deps)
+          # 2. Handle pnpm build config (onlyBuiltDependencies vs neverBuiltDependencies)
+          #    OpenClaw uses onlyBuiltDependencies (whitelist) — adding neverBuiltDependencies
+          #    conflicts with it. So we detect which mode is in use and act accordingly.
           node -e "
             const fs = require('fs');
             const pkgPath = '${PROJECT_DIR}/package.json';
             const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
             if (!pkg.pnpm) pkg.pnpm = {};
-            if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
-            if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) {
-              pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
+
+            // If onlyBuiltDependencies exists (whitelist mode), remove node-llama-cpp from it
+            if (pkg.pnpm.onlyBuiltDependencies) {
+              pkg.pnpm.onlyBuiltDependencies = pkg.pnpm.onlyBuiltDependencies.filter(d => d !== 'node-llama-cpp');
+              console.log('  [✔] Removed node-llama-cpp from onlyBuiltDependencies whitelist');
+            } else {
+              // No whitelist exists, safe to use blacklist
+              if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
+              if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) {
+                pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
+              }
+              console.log('  [✔] Added node-llama-cpp to neverBuiltDependencies blacklist');
             }
-            // Also add pnpm overrides to substitute a dummy for any transitive resolution
+
+            // Add pnpm overrides to prevent resolution entirely
             if (!pkg.pnpm.overrides) pkg.pnpm.overrides = {};
-            pkg.pnpm.overrides['node-llama-cpp'] = '0.0.0-skip';
+            pkg.pnpm.overrides['node-llama-cpp'] = 'link:./llama-stub';
+
             // npm overrides for non-pnpm projects
             if (!pkg.overrides) pkg.overrides = {};
-            pkg.overrides['node-llama-cpp'] = '0.0.0-skip';
+            pkg.overrides['node-llama-cpp'] = 'link:./llama-stub';
+
             fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-            console.log('  [✔] Injected neverBuiltDependencies + overrides');
+            console.log('  [✔] Injected pnpm config + overrides');
           " 2>/dev/null || true
 
-          # 3. Remove node-llama-cpp from pnpm-lock.yaml (if it exists)
+          # 3. Create a tiny stub package that node-llama-cpp overrides resolve to
+          mkdir -p "${PROJECT_DIR}/llama-stub"
+          echo '{"name":"node-llama-cpp","version":"0.0.0","description":"stub"}' > "${PROJECT_DIR}/llama-stub/package.json"
+          echo "module.exports = {};" > "${PROJECT_DIR}/llama-stub/index.js"
+          echo "  [✔] Created llama-stub dummy package"
+
+          # 4. Remove node-llama-cpp from pnpm-lock.yaml (if it exists)
           if [ -f "${PROJECT_DIR}/pnpm-lock.yaml" ]; then
             sed -i '/node-llama-cpp/d' "${PROJECT_DIR}/pnpm-lock.yaml" 2>/dev/null || true
             echo "  [✔] Cleaned pnpm-lock.yaml"
           fi
 
-          # 4. Create .npmrc to block scripts for node-llama-cpp
-          cat >> "${PROJECT_DIR}/.npmrc" << 'NPMRC'
-          node-llama-cpp:ignore-scripts=true
-          NPMRC
+          # 5. Create .npmrc to block scripts for node-llama-cpp
+          echo 'node-llama-cpp:ignore-scripts=true' >> "${PROJECT_DIR}/.npmrc"
           echo "  [✔] Created .npmrc script block"
 
           echo "=== node-llama-cpp fully stripped ==="
