@@ -26,8 +26,8 @@ jobs:
             -v $(pwd)/mc-build:/app \
             -w /app \
             arm64v8/node:22-bullseye \
-            /bin/bash -c "npm install --legacy-peer-deps && npm run build && tar -czf ../mission-control-arm64.tar.gz .next node_modules package.json"
-          mv mission-control-arm64.tar.gz ./artifacts/
+            /bin/bash -c "npm install --legacy-peer-deps && npm run build && tar -czf mission-control-arm64.tar.gz .next node_modules package.json"
+          mv mc-build/mission-control-arm64.tar.gz ./artifacts/
 
       - name: Build OpenClaw (ARM64)
         run: |
@@ -36,8 +36,8 @@ jobs:
             -v $(pwd)/oc-build:/app \
             -w /app \
             arm64v8/node:22-bullseye \
-            /bin/bash -c "npm install --legacy-peer-deps && npm run build || true && tar -czf ../openclaw-arm64.tar.gz packages node_modules package.json"
-          mv openclaw-arm64.tar.gz ./artifacts/
+            /bin/bash -c "npm install --legacy-peer-deps && npm run build || true && tar -czf openclaw-arm64.tar.gz packages node_modules package.json"
+          mv oc-build/openclaw-arm64.tar.gz ./artifacts/
 
       - name: Deploy to Builds Branch
         uses: peaceiris/actions-gh-pages@v3
