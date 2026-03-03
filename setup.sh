@@ -65,6 +65,14 @@ apt install -y nodejs
 echo "[*] Installing pnpm and pm2..."
 npm install -g pnpm pm2 typescript tsx
 
+# Set Global Environment Variables for PRoot stability
+echo "export NEXT_TURBO=0" >> /root/.bashrc
+echo "export NEXT_TELEMETRY_DISABLED=1" >> /root/.bashrc
+echo "export HOST=0.0.0.0" >> /root/.bashrc
+export NEXT_TURBO=0
+export NEXT_TELEMETRY_DISABLED=1
+export HOST=0.0.0.0
+
 # Install OpenClaw
 echo "[*] Setting up OpenClaw..."
 cd /root
@@ -72,7 +80,7 @@ if [ ! -d "openclaw" ]; then
     git clone https://github.com/openclaw/openclaw.git
 fi
 cd openclaw
-pnpm install
+pnpm install --shamefully-hoist
 pnpm build || echo "Ignoring openclaw build errors, it may use tsx runtime."
 
 # Install Mission Control
@@ -82,7 +90,7 @@ if [ ! -d "mission-control" ]; then
     git clone https://github.com/builderz-labs/mission-control.git
 fi
 cd mission-control
-pnpm install
+pnpm install --shamefully-hoist
 if [ ! -f ".env" ]; then
     cp .env.example .env 2>/dev/null || cat << 'ENV' > .env
 PORT=3000
@@ -93,12 +101,26 @@ ENV
 fi
 pnpm build || echo "Ignoring build errors, fallback to dev if needed."
 
+# --- PRoot Specific Fixes (Turbopack avoidance & Port Binding) ---
+echo "[*] Patching mission-control to avoid Turbopack errors in PRoot..."
+cd /root/mission-control
+# Remove --turbo from all scripts
+sed -i 's/--turbo//g' package.json
+# Force binding to 0.0.0.0 in scripts if explicitly set to 127.0.0.1
+sed -i 's/--hostname 127.0.0.1/--hostname 0.0.0.0/g' package.json
+# Ensure environment variable to disable Turbopack is set
+export NEXT_TURBO=0
+export NEXT_TELEMETRY_DISABLED=1
+export HOST=0.0.0.0
+
+cd /root
+
 # Setup PM2 for process management
 echo "[*] Configuring PM2 to run both applications (Ports 3000 and 3001)..."
 pm2 start "pnpm gateway:watch --port 3001" --name openclaw --cwd /root/openclaw || pm2 start "tsx ./packages/cli/src/index.ts gateway --port 3001" --name openclaw --cwd /root/openclaw
 
-# Mission Control runs on 3000
-pm2 start "pnpm dev --port 3000" --name mission-control --cwd /root/mission-control
+# Mission Control runs on 3000 - Force 0.0.0.0 and disable turbo
+pm2 start "pnpm dev --port 3000 -- --hostname 0.0.0.0" --name mission-control --cwd /root/mission-control --env NEXT_TURBO=0,HOST=0.0.0.0,NEXT_TELEMETRY_DISABLED=1
 
 # Save PM2 state
 pm2 save
@@ -129,6 +151,7 @@ pnpm install
 pnpm build || true
 
 echo "-> Restarting PM2 Services..."
+export NEXT_TURBO=0
 pm2 restart all
 pm2 save
 
