@@ -1,0 +1,105 @@
+name: 🚀 Build ARM64 Artifacts (Phone optimized)
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Once a day
+  workflow_dispatch: # Manual run
+
+permissions:
+  contents: write
+
+env:
+  NODE_LLAMA_CPP_SKIP_POSTINSTALL: "1"
+
+  # Reusable inline script to strip node-llama-cpp from any package.json
+  # This runs inside the Docker container before npm/pnpm install
+  STRIP_LLAMA: |
+    node -e "
+      const fs = require('fs');
+      const pkg = JSON.parse(fs.readFileSync('/app/package.json', 'utf8'));
+      let changed = false;
+      for (const s of ['dependencies','devDependencies','optionalDependencies','peerDependencies']) {
+        if (pkg[s] && pkg[s]['node-llama-cpp']) { delete pkg[s]['node-llama-cpp']; changed = true; }
+      }
+      if (changed) {
+        fs.writeFileSync('/app/package.json', JSON.stringify(pkg, null, 2) + '\n');
+        console.log('[✔] Stripped node-llama-cpp from package.json');
+      } else {
+        console.log('[i] node-llama-cpp not found in package.json');
+      }
+    "
+
+jobs:
+  build-apps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build Mission Control (ARM64)
+        run: |
+          mkdir -p artifacts
+          git clone --depth 1 https://github.com/builderz-labs/mission-control.git mc-build
+          docker run --rm --privileged --platform linux/arm64 \
+            -e NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 \
+            -v $(pwd)/mc-build:/app \
+            -w /app \
+            arm64v8/node:22-bullseye \
+            /bin/bash -c "
+              ${STRIP_LLAMA}
+              npm install -g pnpm && \
+              npm install --legacy-peer-deps && \
+              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null || true && \
+              npm run build && \
+              tar -czf mission-control-arm64.tar.gz .next node_modules package.json
+            "
+          # Split into 50MB chunks to bypass GitHub limit
+          split -b 50M mc-build/mission-control-arm64.tar.gz ./artifacts/mission-control-arm64.tar.gz.part-
+
+      - name: Build OpenClaw (ARM64)
+        run: |
+          git clone --depth 1 https://github.com/openclaw/openclaw.git oc-build
+          docker run --rm --privileged --platform linux/arm64 \
+            -e NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 \
+            -v $(pwd)/oc-build:/app \
+            -w /app \
+            arm64v8/node:22-bullseye \
+            /bin/bash -c "
+              ${STRIP_LLAMA}
+              npm install -g pnpm && \
+              pnpm install --no-frozen-lockfile && \
+              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null || true && \
+              pnpm build || true && \
+              tar -czf openclaw-arm64.tar.gz packages node_modules package.json
+            "
+          # Split into 50MB chunks
+          split -b 50M oc-build/openclaw-arm64.tar.gz ./artifacts/openclaw-arm64.tar.gz.part-
+
+      - name: Build Perplexica (ARM64)
+        run: |
+          git clone --depth 1 https://github.com/ItzCrazyKns/Perplexica.git px-build
+          docker run --rm --privileged --platform linux/arm64 \
+            -e NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 \
+            -v $(pwd)/px-build:/app \
+            -w /app \
+            arm64v8/node:22-bullseye \
+            /bin/bash -c "
+              ${STRIP_LLAMA}
+              npm install --legacy-peer-deps && \
+              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null || true && \
+              npm run build && \
+              tar -czf perplexica-arm64.tar.gz .next node_modules package.json dist
+            "
+          # Split into 50MB chunks
+          split -b 50M px-build/perplexica-arm64.tar.gz ./artifacts/perplexica-arm64.tar.gz.part-
+
+      - name: Deploy to Builds Branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./artifacts
+          publish_branch: builds
+          enable_jekyll: true
