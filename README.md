@@ -1,6 +1,6 @@
-# 🚀 OpenClaw & Mission Control: One-Command Termux VPS
+# OpenClaw & Mission Control & Perplexica.
 
-This setup converts your Android phone into a powerful Debian 12 VPS using **PRoot-Distro**, pre-configured for **OpenClaw** and **Mission Control**. It is optimized for **Tailscale** and **VS Code Remote-SSH**.
+This setup converts your Android phone into a powerful Debian 12 VPS using **PRoot-Distro**, pre-configured for **OpenClaw** and **Mission Control** and **Perplexica**. It is optimized for **Tailscale** and **VS Code Remote-SSH**.
 
 ## ⚡ One-Line Quick Install
 Run this in **Termux** to install or update everything:
