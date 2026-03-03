@@ -16,7 +16,8 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
     pkg upgrade -y
     
     # Install proot-distro, essential tools & socat for bridging
-    pkg install proot-distro wget curl openssh socat -y
+    # Also attempt to install Tailscale; if it fails, the user may need a custom build
+    pkg install proot-distro wget curl openssh socat tailscale -y || echo "[⚠️] Tailscale install failed. You can try building from source: https://github.com/anasfanani/tailscale-android-cli"
     
     # Auto-restart bridges on Termux host
     setup_bridge() {
@@ -93,9 +94,36 @@ npm install -g pnpm pm2 typescript tsx
 echo "export NEXT_TURBO=0" >> /root/.bashrc
 echo "export NEXT_TELEMETRY_DISABLED=1" >> /root/.bashrc
 echo "export HOST=0.0.0.0" >> /root/.bashrc
+
+# Implement Bionic Bypass for Node.js stability on Android
+cat > /root/.node_bypass.js << 'BYPASS'
+const os = require('os');
+const originalNetworkInterfaces = os.networkInterfaces;
+os.networkInterfaces = function() {
+  try {
+    const interfaces = originalNetworkInterfaces.call(os);
+    if (interfaces && Object.keys(interfaces).length > 0) {
+      return interfaces;
+    }
+  } catch (e) {}
+  return {
+    lo: [{
+      address: '127.0.0.1',
+      netmask: '255.0.0.0',
+      family: 'IPv4',
+      mac: '00:00:00:00:00:00',
+      internal: true,
+      cidr: '127.0.0.1/8'
+    }]
+  };
+};
+BYPASS
+echo 'export NODE_OPTIONS="--require /root/.node_bypass.js"' >> /root/.bashrc
+
 export NEXT_TURBO=0
 export NEXT_TELEMETRY_DISABLED=1
 export HOST=0.0.0.0
+export NODE_OPTIONS="--require /root/.node_bypass.js"
 
 REPO_BASE="https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/builds"
 

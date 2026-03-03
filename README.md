@@ -32,6 +32,9 @@ pkg upgrade -y && pkg install wget -y && wget -qO- https://raw.githubusercontent
 ## 🌐 Tailscale & Connectivity
 This setup is optimized for **Tailscale**. All network bridges are bound to `0.0.0.0` to ensure they are accessible via your Tailscale IP or MagicDNS name.
 
+### Installation
+The setup script attempts to install `tailscale` via `pkg`. If you encounter issues with the official package, consider using the [Tailscale Android CLI](https://github.com/anasfanani/tailscale-android-cli) which is specifically built for Termux and supports Tailscale SSH.
+
 ### Restarting Bridges
 If you lose connection to your services after a reboot or network change, run this command in **Termux** (not Debian):
 ```bash
