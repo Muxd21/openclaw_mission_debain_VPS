@@ -78,13 +78,29 @@ REPO_BASE="https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/
 # Function to attempt Binary Install (Fast)
 binary_install() {
     APP_NAME=$1
-    TAR_FILE="${APP_NAME}-arm64.tar.gz"
-    echo "[*] Checking for pre-built ${APP_NAME} binary..."
-    if curl --output /dev/null --silent --head --fail "${REPO_BASE}/${TAR_FILE}"; then
-        echo "[🚀] Prebuilt binary found! Downloading..."
+    echo "[*] Checking for pre-built ${APP_NAME} binary parts..."
+    
+    # Check if at least the first part exists
+    if curl --output /dev/null --silent --head --fail "${REPO_BASE}/${APP_NAME}-arm64.tar.gz.part-aa"; then
+        echo "[🚀] Prebuilt binary parts found! Downloading..."
         mkdir -p "/root/${APP_NAME}" && cd "/root/${APP_NAME}"
-        wget -q "${REPO_BASE}/${TAR_FILE}" -O "${TAR_FILE}"
-        tar -xzf "${TAR_FILE}" && rm "${TAR_FILE}"
+        
+        # Download all parts (aa, ab, ac...)
+        for part in {a..z}{a..z}; do
+            PART_FILE="${APP_NAME}-arm64.tar.gz.part-${part}"
+            if curl --output /dev/null --silent --head --fail "${REPO_BASE}/${PART_FILE}"; then
+                echo "  -> Downloading part ${part}..."
+                wget -q "${REPO_BASE}/${PART_FILE}" -O "${PART_FILE}"
+            else
+                break # No more parts
+            fi
+        done
+        
+        # Reconstruct and extract
+        echo "[*] Reconstructing archive..."
+        cat ${APP_NAME}-arm64.tar.gz.part-* > "${APP_NAME}.tar.gz"
+        tar -xzf "${APP_NAME}.tar.gz"
+        rm "${APP_NAME}.tar.gz" ${APP_NAME}-arm64.tar.gz.part-*
         return 0
     else
         echo "[⚠️] Prebuilt binary not found for ${APP_NAME}. Falling back to slow build..."

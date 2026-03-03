@@ -26,8 +26,9 @@ jobs:
             -v $(pwd)/mc-build:/app \
             -w /app \
             arm64v8/node:22-bullseye \
-            /bin/bash -c "npm install --legacy-peer-deps && npm run build && tar -czf mission-control-arm64.tar.gz .next node_modules package.json"
-          mv mc-build/mission-control-arm64.tar.gz ./artifacts/
+            /bin/bash -c "npm install -g pnpm && npm install --legacy-peer-deps && npm run build && tar -czf mission-control-arm64.tar.gz .next node_modules package.json"
+          # Split into 50MB chunks to bypass GitHub limit
+          split -b 50M mc-build/mission-control-arm64.tar.gz ./artifacts/mission-control-arm64.tar.gz.part-
 
       - name: Build OpenClaw (ARM64)
         run: |
@@ -36,8 +37,9 @@ jobs:
             -v $(pwd)/oc-build:/app \
             -w /app \
             arm64v8/node:22-bullseye \
-            /bin/bash -c "npm install --legacy-peer-deps && npm run build || true && tar -czf openclaw-arm64.tar.gz packages node_modules package.json"
-          mv oc-build/openclaw-arm64.tar.gz ./artifacts/
+            /bin/bash -c "npm install -g pnpm && pnpm install --no-frozen-lockfile && pnpm build || true && tar -czf openclaw-arm64.tar.gz packages node_modules package.json"
+          # Split into 50MB chunks
+          split -b 50M oc-build/openclaw-arm64.tar.gz ./artifacts/openclaw-arm64.tar.gz.part-
 
       - name: Deploy to Builds Branch
         uses: peaceiris/actions-gh-pages@v3
@@ -45,5 +47,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./artifacts
           publish_branch: builds
-          force_pair: true
           enable_jekyll: true
