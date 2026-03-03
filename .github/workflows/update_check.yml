@@ -1,0 +1,27 @@
+name: Check for External Updates
+
+on:
+  schedule:
+    - cron: '0 0,6,12,18 * * *' # 4 times a day
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch Latest Relases
+        id: check
+        run: |
+          MC_VERSION=$(curl -s https://api.github.com/repos/builderz-labs/mission-control/releases/latest | jq -r .tag_name)
+          OC_VERSION=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r .tag_name)
+          
+          # Just as an example, this can trigger a rebuild or notification
+          echo "Mission Control Latest: $MC_VERSION"
+          echo "OpenClaw Latest: $OC_VERSION"
+          
+          # You can add logic here to trigger a build or pull updates
+          # Since setup.sh pulls from main branches, it will always get latest next time it runs.
+          # This workflow primarily serves as a status check for the Muxd21/openclaw_mission_debain_VPS project.

@@ -80,8 +80,9 @@ if [ ! -d "openclaw" ]; then
     git clone https://github.com/openclaw/openclaw.git
 fi
 cd openclaw
-pnpm install --shamefully-hoist
-pnpm build || echo "Ignoring openclaw build errors, it may use tsx runtime."
+npm install --legacy-peer-deps
+echo "[*] Building OpenClaw..."
+npm run build || echo "Build error, will attempt runtime start."
 
 # Install Mission Control
 echo "[*] Setting up Mission Control..."
@@ -90,43 +91,28 @@ if [ ! -d "mission-control" ]; then
     git clone https://github.com/builderz-labs/mission-control.git
 fi
 cd mission-control
-pnpm install --shamefully-hoist
-if [ ! -f ".env" ]; then
-    cp .env.example .env 2>/dev/null || cat << 'ENV' > .env
-PORT=3000
-HOST=0.0.0.0
-AUTH_USER=admin
-AUTH_PASS=admin
-ENV
-fi
-pnpm build || echo "Ignoring build errors, fallback to dev if needed."
+npm install --legacy-peer-deps
+echo "[*] Building Mission Control..."
+npm run build 
 
-# --- PRoot Specific Fixes (Turbopack avoidance & Port Binding) ---
-echo "[*] Patching mission-control to avoid Turbopack errors in PRoot..."
+# --- PRoot Specific Fixes ---
+echo "[*] Patching for PRoot compatibility..."
+# Enforce 0.0.0.0 in package scripts
+sed -i 's/next dev/next dev -H 0.0.0.0/g' /root/mission-control/package.json
+sed -i 's/next start/next start -H 0.0.0.0/g' /root/mission-control/package.json
+
+# Setup PM2 for production (More stable than dev in PRoot)
+echo "[*] Starting services with PM2..."
+pm2 delete all 2>/dev/null || true
+
+# Mission Control (Port 3000)
 cd /root/mission-control
-# Remove --turbo from all scripts
-sed -i 's/--turbo//g' package.json
-# Force binding to 0.0.0.0 and port 3000 in scripts
-sed -i 's/next dev/next dev --hostname 0.0.0.0 --port 3000/g' package.json
-sed -i 's/--hostname 127.0.0.1/--hostname 0.0.0.0/g' package.json
-# Ensure environment variable to disable Turbopack is set
-export NEXT_TURBO=0
-export NEXT_TELEMETRY_DISABLED=1
-export HOST=0.0.0.0
+pm2 start "npm run start -- --port 3000" --name mission-control --env HOST=0.0.0.0,NEXT_TURBO=0
 
-cd /root
+# OpenClaw (Port 3001)
+cd /root/openclaw
+pm2 start "npm run gateway -- --port 3001" --name openclaw --env HOST=0.0.0.0
 
-# Setup PM2 for process management
-echo "[*] Configuring PM2 to run both applications (Ports 3000 and 3001)..."
-
-# OpenClaw: use standard entry point/script
-pm2 start "pnpm gateway --port 3001" --name openclaw --cwd /root/openclaw || \
-pm2 start "tsx packages/cli/index.ts gateway --port 3001" --name openclaw --cwd /root/openclaw
-
-# Mission Control: use simple dev command as we patched package.json
-pm2 start "pnpm dev" --name mission-control --cwd /root/mission-control --env NEXT_TURBO=0,HOST=0.0.0.0,NEXT_TELEMETRY_DISABLED=1
-
-# Save PM2 state
 pm2 save
 
 # Create the Perfect One-Command Sync Script
@@ -142,24 +128,20 @@ echo "=========================================="
 
 echo "-> Syncing OpenClaw..."
 cd /root/openclaw
-git reset --hard HEAD
 git pull
-pnpm install
-pnpm build || true
+npm install --legacy-peer-deps
+npm run build || true
 
 echo "-> Syncing Mission Control..."
 cd /root/mission-control
-git reset --hard HEAD
 git pull
-pnpm install
-pnpm build || true
+npm install --legacy-peer-deps
+npm run build
 
 echo "-> Restarting PM2 Services..."
-export NEXT_TURBO=0
 pm2 restart all
 pm2 save
-
-echo "==== Perfect Sync Complete! ===="
+echo "==== Sync Complete! ===="
 SYNC
 chmod +x /root/sync.sh
 

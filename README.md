@@ -1,67 +1,33 @@
-# OpenClaw & Mission Control Debian 12 VPS Setup for Termux
+# 🚀 OpenClaw & Mission Control: One-Command Termux VPS
 
-This repository contains an automated script to convert a mobile device running Termux into a full-fledged VPS environment using `proot-distro` with Debian 12. It sets up and optimally configures:
+This setup converts your Android phone into a powerful Debian 12 VPS using **PRoot-Distro**, pre-configured for **OpenClaw** and **Mission Control**. It is optimized for **Tailscale** and **VS Code Remote-SSH**.
 
-- **[OpenClaw](https://github.com/openclaw/openclaw)** (Running on Port 3001)
-- **[Mission Control](https://github.com/builderz-labs/mission-control)** (Running on Port 3000)
-
-## Features
-
-- **Automated Installation:** Installs dependencies (`proot`, `wget`, `ssh`, `tailscale`), sets up Debian 12, Node.js 22 LTS, `pnpm`, and `pm2`.
-- **Background Processes:** Uses PM2 to manage both applications seamlessly.
-- **SSH Connectivity:** Launches an SSH Server inside Debian on port `2222` to connect using VS Code via your PC just like a real VPS.
-- **One-Command Sync:** Keeps OpenClaw and Mission Control safely updated with a `sync.sh` available inside the environment.
-- **Tailscale Optimization:** Use Tailscale on Termux/Mobile to access OpenClaw and Mission Control via Tailscale IP directly from your PC!
-
----
-
-## 🚀 Quick Setup Instructions
-
-1. **Install Termux** from F-Droid (do not use Google Play version).
-2. Inside Termux, clone this repository or download the setup script:
-   ```bash
-   pkg update && pkg install git -y
-   git clone https://github.com/Muxd21/openclaw_mission_debain_VPS.git
-   cd openclaw_mission_debain_VPS
-   chmod +x setup.sh
-   ./setup.sh
-   ```
-
-3. **Grab a Coffee!** The script will handle the heavy lifting of installing Debian 12, downloading Node, and building both applications locally.
-
----
-
-## 💻 Connecting from your PC (VS Code Remote)
-
-You can write plugins and configurations locally on your mobile using VS Code from your Desktop PC.
-
-1. Ensure **Tailscale** is installed and active on both your mobile device (Host) and your PC.
-2. In VS Code on your PC, install the **Remote - SSH** extension.
-3. Add a new SSH Host:
-   ```
-   ssh -p 2222 root@<YOUR_PHONE_TAILSCALE_IP>
-   ```
-4. By default, the Root password is set to: `root` (Make sure to change this using `passwd`!).
-5. Once inside, you have a completely isolated standard Linux workspace under `/root`.
-
----
-
-## 🔄 Updating Applications
-
-To update both OpenClaw and Mission Control automatically in the future, login to your Debian instance and run the sync script:
+## ⚡ One-Line Quick Install
+Run this in **Termux** to install or update everything:
 
 ```bash
-# 1. Login to your Debian VPS
-proot-distro login debian
-
-# 2. Run the Perfect Sync command
-/root/sync.sh
+pkg upgrade -y && pkg install wget -y && wget -qO- https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/main/setup.sh | bash
 ```
+
+## 🛠️ Included Features
+- **Auto-Fix PRoot DNS:** No more connectivity issues inside Debian.
+- **VPS-Style SSH:** Connect via VS Code on Port `2222` (Password: `root`).
+- **NPM-Stabilized:** Uses `npm` instead of `pnpm` to bypass PRoot symlink errors.
+- **Production Performance:** Runs in production mode for lower RAM usage and better stability.
+- **One-Command Sync:** Update both apps from GitHub with `/root/sync.sh`.
+
+## 📂 Project Shortcuts (Inside Debian)
+- `Enter Debian`: `proot-distro login debian`
+- `Start Services`: `/root/start.sh`
+- `Sync & Update`: `/root/sync.sh`
+- `Mission Control`: `http://<PHONE_IP>:3000`
+- `OpenClaw`: `http://<PHONE_IP>:3001`
 
 ---
 
-## 📱 Access the Web Platforms
+## 🤖 GitHub Automation (Auto-Update)
+This repo includes a **GitHub Action** that checks for new releases of **Mission Control** and **OpenClaw** 4 times a day. If an update is found, it automatically syncs this setup to ensure the "One-Line Quick Install" always pulls the latest compatible versions.
 
-Once everything is up, use Tailscale IP from your PC's browser:
-- **Mission Control Admin**: `http://<YOUR_PHONE_TAILSCALE_IP>:3000` (Default Pass/User: admin/admin)
-- **OpenClaw Gateway**: `http://<YOUR_PHONE_TAILSCALE_IP>:3001`
+### Repos Monitored:
+1. [builderz-labs/mission-control](https://github.com/builderz-labs/mission-control)
+2. [openclaw/openclaw](https://github.com/openclaw/openclaw)
