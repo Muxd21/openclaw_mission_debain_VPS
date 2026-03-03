@@ -94,6 +94,7 @@ npm install -g pnpm pm2 typescript tsx
 echo "export NEXT_TURBO=0" >> /root/.bashrc
 echo "export NEXT_TELEMETRY_DISABLED=1" >> /root/.bashrc
 echo "export HOST=0.0.0.0" >> /root/.bashrc
+echo "export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1" >> /root/.bashrc
 
 # Implement Bionic Bypass for Node.js stability on Android
 cat > /root/.node_bypass.js << 'BYPASS'
@@ -124,6 +125,7 @@ export NEXT_TURBO=0
 export NEXT_TELEMETRY_DISABLED=1
 export HOST=0.0.0.0
 export NODE_OPTIONS="--require /root/.node_bypass.js"
+export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1
 
 REPO_BASE="https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/builds"
 
@@ -223,6 +225,7 @@ echo "[*] Creating /root/sync.sh command..."
 cat << 'SYNC' > /root/sync.sh
 #!/bin/bash
 set -e
+export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1
 echo "=========================================="
 echo "==== Starting Perfect Sync & Update   ===="
 echo "=========================================="
