@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw & Mission Control | VPS Setup</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="https://via.placeholder.com/32/3b82f6/ffffff?text=V">
+</head>
+<body>
+    <div class="gradient-bg"></div>
+    
+    <div class="container">
+        <header class="animate">
+            <h1>Termux Debian VPS</h1>
+            <p class="tagline">The ultimate One-Command setup for OpenClaw & Mission Control</p>
+        </header>
+
+        <div class="hero-stats animate delay-1">
+            <div class="stat-card">
+                <h3>Architecture</h3>
+                <p>Debian 12</p>
+            </div>
+            <div class="stat-card">
+                <h3>Environment</h3>
+                <p>PRoot Distro</p>
+            </div>
+            <div class="stat-card">
+                <h3>Access</h3>
+                <p>Tailscale</p>
+            </div>
+        </div>
+
+        <section class="section animate delay-2">
+            <div class="card">
+                <h2><span>⚡</span> The Quick Install</h2>
+                <p>Convert your phone into a VPS-style development environment in minutes. This one-liner handles dependencies, DNS fixes, and process management automatically.</p>
+                
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>bash</span>
+                        <button class="copy-btn" onclick="copyCode()">Copy</button>
+                    </div>
+                    <code id="install-cmd" class="one-liner">pkg upgrade -y && pkg install wget -y && wget -qO- https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/main/setup.sh | bash</code>
+                </div>
+            </div>
+        </section>
+
+        <section class="section animate delay-2">
+            <h2><span>🛠️</span> Core Features</h2>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h3>VPS-Style Access</h3>
+                    <p>Pre-configured SSH on port 2222. Connect your PC directly with VS Code Remote-SSH for a desktop workflow.</p>
+                </div>
+                <div class="feature-item">
+                    <h3>NPM Stability</h3>
+                    <p>Optimized for Android limitations. Reliable flat node_modules that won't trigger PRoot symlink errors.</p>
+                </div>
+                <div class="feature-item">
+                    <h3>One-Command Sync</h3>
+                    <p>Stay updated with `/root/sync.sh`. Pulls the latest commits from both projects and rebuilds production assets seamlessly.</p>
+                </div>
+                <div class="feature-item">
+                    <h3>Tailscale Ready</h3>
+                    <p>Binds to 0.0.0.0 automatically. Access your Mission Control dashboard securely from anywhere on your Tailnet.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section animate delay-2">
+            <div class="card">
+                <h2><span>📂</span> Rapid Shortcuts</h2>
+                <div class="code-block">
+                    <div class="code-header"><span>shortcuts</span></div>
+                    <code>
+# Enter your Debian environment
+proot-distro login debian
+
+# Restart all background services
+/root/start.sh
+
+# Update OpenClaw & Mission Control
+/root/sync.sh
+                    </code>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <p>Built for the community by Muxd21</p>
+            <p style="margin-top: 0.5rem;">Mission Control: Port 3000 | OpenClaw: Port 3001</p>
+        </footer>
+    </div>
+
+    <script>
+        function copyCode() {
+            const code = document.getElementById('install-cmd').innerText;
+            navigator.clipboard.writeText(code);
+            const btn = document.querySelector('.copy-btn');
+            btn.innerText = 'Copied!';
+            setTimeout(() => btn.innerText = 'Copy', 2000);
+        }
+    </script>
+</body>
+</html>
