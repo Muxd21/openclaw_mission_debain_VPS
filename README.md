@@ -45,8 +45,9 @@ If you lose connection to your services after a reboot or network change, run th
 ---
 
 ## 🤖 GitHub Automation (Auto-Update)
-This repo includes a **GitHub Action** that checks for new releases of **Mission Control** and **OpenClaw** 4 times a day. If an update is found, it automatically syncs this setup to ensure the "One-Line Quick Install" always pulls the latest compatible versions.
+This repo includes a **GitHub Action** that checks for new releases of **Mission Control**, **OpenClaw**, and **Perplexica** 4 times a day. If an update is found, it automatically syncs this setup to ensure the "One-Line Quick Install" always pulls the latest compatible versions.
 
 ### Repos Monitored:
 1. [builderz-labs/mission-control](https://github.com/builderz-labs/mission-control)
 2. [openclaw/openclaw](https://github.com/openclaw/openclaw)
+3. [ItzCrazyKns/Perplexica](https://github.com/ItzCrazyKns/Perplexica)
