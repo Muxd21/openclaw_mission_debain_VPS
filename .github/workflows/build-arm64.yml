@@ -1,0 +1,48 @@
+name: 🚀 Build ARM64 Artifacts (Phone optimized)
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Once a day
+  workflow_dispatch: # Manual run
+
+permissions:
+  contents: write
+
+jobs:
+  build-apps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build Mission Control (ARM64)
+        run: |
+          git clone --depth 1 https://github.com/builderz-labs/mission-control.git mc-build
+          docker run --rm --privileged \
+            -v $(pwd)/mc-build:/app \
+            -w /app \
+            arm64v8/node:22-bullseye \
+            /bin/bash -c "npm install --legacy-peer-deps && npm run build && tar -czf ../mission-control-arm64.tar.gz .next node_modules package.json"
+          mv mission-control-arm64.tar.gz ./artifacts/ || (mkdir artifacts && mv mission-control-arm64.tar.gz ./artifacts/)
+
+      - name: Build OpenClaw (ARM64)
+        run: |
+          git clone --depth 1 https://github.com/openclaw/openclaw.git oc-build
+          docker run --rm --privileged \
+            -v $(pwd)/oc-build:/app \
+            -w /app \
+            arm64v8/node:22-bullseye \
+            /bin/bash -c "npm install --legacy-peer-deps && npm run build || true && tar -czf ../openclaw-arm64.tar.gz packages node_modules package.json"
+          mv openclaw-arm64.tar.gz ./artifacts/
+
+      - name: Deploy to Builds Branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./artifacts
+          publish_branch: builds
+          force_pair: true
+          enable_jekyll: true

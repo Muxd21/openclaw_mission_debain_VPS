@@ -73,46 +73,52 @@ export NEXT_TURBO=0
 export NEXT_TELEMETRY_DISABLED=1
 export HOST=0.0.0.0
 
-# Install OpenClaw
-echo "[*] Setting up OpenClaw..."
-cd /root
-if [ ! -d "openclaw" ]; then
-    git clone https://github.com/openclaw/openclaw.git
-fi
-cd openclaw
-npm install --legacy-peer-deps
-echo "[*] Building OpenClaw..."
-npm run build || echo "Build error, will attempt runtime start."
+REPO_BASE="https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/builds"
 
-# Install Mission Control
-echo "[*] Setting up Mission Control..."
+# Function to attempt Binary Install (Fast)
+binary_install() {
+    APP_NAME=$1
+    TAR_FILE="${APP_NAME}-arm64.tar.gz"
+    echo "[*] Checking for pre-built ${APP_NAME} binary..."
+    if curl --output /dev/null --silent --head --fail "${REPO_BASE}/${TAR_FILE}"; then
+        echo "[🚀] Prebuilt binary found! Downloading..."
+        mkdir -p "/root/${APP_NAME}" && cd "/root/${APP_NAME}"
+        wget -q "${REPO_BASE}/${TAR_FILE}" -O "${TAR_FILE}"
+        tar -xzf "${TAR_FILE}" && rm "${TAR_FILE}"
+        return 0
+    else
+        echo "[⚠️] Prebuilt binary not found for ${APP_NAME}. Falling back to slow build..."
+        return 1
+    fi
+}
+
+# --- INSTALL APPS ---
 cd /root
-if [ ! -d "mission-control" ]; then
-    git clone https://github.com/builderz-labs/mission-control.git
+
+# 1. OpenClaw
+if ! binary_install "openclaw"; then
+    if [ ! -d "openclaw" ]; then git clone --depth 1 https://github.com/openclaw/openclaw.git; fi
+    cd openclaw && npm install --legacy-peer-deps && npm run build || true
 fi
-cd mission-control
-npm install --legacy-peer-deps
-echo "[*] Building Mission Control..."
-npm run build 
+
+# 2. Mission Control
+cd /root
+if ! binary_install "mission-control"; then
+    if [ ! -d "mission-control" ]; then git clone --depth 1 https://github.com/builderz-labs/mission-control.git; fi
+    cd mission-control && npm install --legacy-peer-deps && npm run build
+fi
 
 # --- PRoot Specific Fixes ---
-echo "[*] Patching for PRoot compatibility..."
-# Enforce 0.0.0.0 in package scripts
+echo "[*] Finalizing configuration..."
+# Always ensure binding 0.0.0.0 is enforced in package.json
 sed -i 's/next dev/next dev -H 0.0.0.0/g' /root/mission-control/package.json
 sed -i 's/next start/next start -H 0.0.0.0/g' /root/mission-control/package.json
 
 # Setup PM2 for production (More stable than dev in PRoot)
 echo "[*] Starting services with PM2..."
 pm2 delete all 2>/dev/null || true
-
-# Mission Control (Port 3000)
-cd /root/mission-control
-pm2 start "npm run start -- --port 3000" --name mission-control --env HOST=0.0.0.0,NEXT_TURBO=0
-
-# OpenClaw (Port 3001)
-cd /root/openclaw
-pm2 start "npm run gateway -- --port 3001" --name openclaw --env HOST=0.0.0.0
-
+pm2 start "npm run start -- --port 3000" --name mission-control --cwd /root/mission-control --env HOST=0.0.0.0,NEXT_TURBO=0
+pm2 start "npm run gateway -- --port 3001" --name openclaw --cwd /root/openclaw --env HOST=0.0.0.0
 pm2 save
 
 # Create the Perfect One-Command Sync Script
