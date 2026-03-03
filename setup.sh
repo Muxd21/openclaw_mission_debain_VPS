@@ -21,13 +21,26 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
     # Auto-restart bridges on Termux host
     setup_bridge() {
         pkill socat || true
-        socat TCP4-LISTEN:2222,reuseaddr,fork TCP4:127.0.0.1:2222 &
-        socat TCP4-LISTEN:3000,reuseaddr,fork TCP4:127.0.0.1:3000 &
-        socat TCP4-LISTEN:3001,reuseaddr,fork TCP4:127.0.0.1:3001 &
-        socat TCP4-LISTEN:3010,reuseaddr,fork TCP4:127.0.0.1:3010 &
-        socat TCP4-LISTEN:3011,reuseaddr,fork TCP4:127.0.0.1:3011 &
+        socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
+        socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
+        socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
+        socat TCP4-LISTEN:3010,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3010 &
+        socat TCP4-LISTEN:3011,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3011 &
     }
     setup_bridge
+
+    # Create persistence script for bridges on Termux host
+    cat << 'BRIDGE' > ~/vps-bridge.sh
+#!/data/data/com.termux/files/usr/bin/bash
+pkill socat || true
+socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
+socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
+socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
+socat TCP4-LISTEN:3010,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3010 &
+socat TCP4-LISTEN:3011,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3011 &
+echo "Network bridges restarted successfully."
+BRIDGE
+    chmod +x ~/vps-bridge.sh
 
     # Install Debian 12
     echo "[*] Installing Debian 12 PRoot..."
@@ -57,7 +70,7 @@ echo "nameserver 8.8.8.8" >> /etc/resolv.conf
 # Update and install basic tools
 echo "[*] Installing system dependencies..."
 apt update && apt upgrade -y
-apt install -y curl git nano wget openssh-server build-essential iptables sudo procps ca-certificates
+apt install -y curl git nano wget openssh-server build-essential sudo procps ca-certificates netcat-openbsd
 
 # Setup SSH Server in PRoot (VPS Style)
 echo "[*] Configuring SSH Server on Port 2222..."
@@ -166,7 +179,7 @@ pm2 start "npm run gateway -- --port 3001" --name openclaw --cwd /root/openclaw 
 
 # Perplexica Backend (Port 3010) & Frontend (Port 3011)
 cd /root/perplexica
-if [ ! -f ".json" ]; then
+if [ ! -f "config.json" ]; then
     echo '{"PORT": 3010, "MEILI_HOST": "http://127.0.0.1:7700"}' > config.json
 fi
 pm2 start "npm run start:backend" --name px-backend --cwd /root/perplexica
@@ -181,6 +194,7 @@ pm2 save
 echo "[*] Creating /root/sync.sh command..."
 cat << 'SYNC' > /root/sync.sh
 #!/bin/bash
+set -e
 echo "=========================================="
 echo "==== Starting Perfect Sync & Update   ===="
 echo "=========================================="

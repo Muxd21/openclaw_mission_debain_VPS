@@ -22,9 +22,21 @@ pkg upgrade -y && pkg install wget -y && wget -qO- https://raw.githubusercontent
 - `Enter Debian`: `proot-distro login debian`
 - `Start Services`: `/root/start.sh`
 - `Sync & Update`: `/root/sync.sh`
+- `Restart Bridges (Termux Host)`: `~/vps-bridge.sh`
 - `Mission Control`: `http://<PHONE_IP>:3000`
 - `OpenClaw`: `http://<PHONE_IP>:3001`
 - `Perplexica`: `http://<PHONE_IP>:3011`
+
+---
+
+## 🌐 Tailscale & Connectivity
+This setup is optimized for **Tailscale**. All network bridges are bound to `0.0.0.0` to ensure they are accessible via your Tailscale IP or MagicDNS name.
+
+### Restarting Bridges
+If you lose connection to your services after a reboot or network change, run this command in **Termux** (not Debian):
+```bash
+~/vps-bridge.sh
+```
 
 ---
 

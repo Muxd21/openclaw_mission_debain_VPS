@@ -22,6 +22,11 @@ jobs:
           echo "Mission Control Latest: $MC_VERSION"
           echo "OpenClaw Latest: $OC_VERSION"
           
-          # You can add logic here to trigger a build or pull updates
-          # Since setup.sh pulls from main branches, it will always get latest next time it runs.
-          # This workflow primarily serves as a status check for the Muxd21/openclaw_mission_debain_VPS project.
+          # NOTE: To trigger another workflow, you MUST use a Personal Access Token (PAT)
+          # instead of the default GITHUB_TOKEN. Replace 'GH_PAT' with your secret name.
+          echo "Triggering build-arm64 workflow..."
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-arm64.yml/dispatches \
+            -d '{"ref":"main"}' || echo "Failed to trigger (Ensure GH_PAT is set)"
