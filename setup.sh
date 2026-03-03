@@ -36,7 +36,6 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
         socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
         socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
         socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
-        socat TCP4-LISTEN:3002,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3002 &
         socat TCP4-LISTEN:3003,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3003 &
     }
     setup_bridge
@@ -48,7 +47,6 @@ pkill socat || true
 socat TCP4-LISTEN:2222,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:2222 &
 socat TCP4-LISTEN:3000,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3000 &
 socat TCP4-LISTEN:3001,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3001 &
-socat TCP4-LISTEN:3002,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3002 &
 socat TCP4-LISTEN:3003,reuseaddr,fork,bind=0.0.0.0 TCP4:127.0.0.1:3003 &
 echo "Network bridges restarted successfully."
 BRIDGE
@@ -201,10 +199,7 @@ if ! binary_install "perplexica"; then
     cd perplexica && npm install --legacy-peer-deps && npm run build
 fi
 
-# 4. Meilisearch (Required for Perplexica)
-echo "[*] Installing Meilisearch..."
-apt install -y meilisearch || (wget https://github.com/meilisearch/meilisearch/releases/download/v1.12.1/meilisearch-linux-arm64 -O /usr/local/bin/meilisearch && chmod +x /usr/local/bin/meilisearch)
-
+# (Meilisearch removed, Perplexica now uses SearXNG)
 # --- PRoot Specific Fixes ---
 echo "[*] Finalizing configuration..."
 # Always ensure binding 0.0.0.0 is enforced in package.json
@@ -221,16 +216,11 @@ pm2 start "npm run start -- --port 3000" --name mission-control --cwd /root/miss
 # OpenClaw (Port 3001)
 pm2 start "npm run gateway -- --port 3001" --name openclaw --cwd /root/openclaw --env HOST=0.0.0.0
 
-# Perplexica Backend (Port 3002) & Frontend (Port 3003)
+# Perplexica (Unified, Port 3003)
 cd /root/perplexica
-if [ ! -f "config.json" ]; then
-    echo '{"PORT": 3002, "MEILI_HOST": "http://127.0.0.1:7700"}' > config.json
-fi
-pm2 start "npm run start:backend" --name px-backend --cwd /root/perplexica
-pm2 start "npm run start:frontend" --name px-frontend --cwd /root/perplexica --env PORT=3003
+pm2 start "npm run start" --name perplexica --cwd /root/perplexica --env PORT=3003,HOST=0.0.0.0
 
-# Meilisearch
-pm2 start "meilisearch --http-addr 127.0.0.1:7700" --name meilisearch
+
 
 pm2 save
 
