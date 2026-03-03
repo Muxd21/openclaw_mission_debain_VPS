@@ -16,8 +16,19 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
     pkg upgrade -y
     
     # Install proot-distro, essential tools & socat for bridging
-    # Also attempt to install Tailscale; if it fails, the user may need a custom build
-    pkg install proot-distro wget curl openssh socat tailscale -y || echo "[⚠️] Tailscale install failed. You can try building from source: https://github.com/anasfanani/tailscale-android-cli"
+    pkg install proot-distro wget curl openssh socat -y
+    
+    # Attempt to install Tailscale; if it fails, download our precompiled ARM64 Android binary
+    echo "[*] Installing Tailscale..."
+    pkg install tailscale -y || {
+        echo "[⚠️] Tailscale pkg install failed. Downloading prebuilt Android binary..."
+        wget -q "https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/builds/tailscale-arm64.tar.gz.part-aa" -O tailscale.tar.gz
+        tar -xzf tailscale.tar.gz
+        mv tailscale $PREFIX/bin/tailscale
+        chmod +x $PREFIX/bin/tailscale
+        rm tailscale.tar.gz
+        echo "[✔] Prebuilt Tailscale installed successfully!"
+    }
     
     # Auto-restart bridges on Termux host
     setup_bridge() {
@@ -127,79 +138,7 @@ export HOST=0.0.0.0
 export NODE_OPTIONS="--require /root/.node_bypass.js"
 export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1
 
-# ===== STRIP LLAMA.CPP FUNCTION =====
-# Nuclear removal of node-llama-cpp from any project (including pnpm monorepos).
-# Handles onlyBuiltDependencies vs neverBuiltDependencies conflict.
-strip_llama_cpp() {
-    local PROJECT_DIR="$1"
-    echo "[🔧] Stripping node-llama-cpp from ${PROJECT_DIR}..."
-
-    # 1. Remove node-llama-cpp from ALL package.json files (root + all workspace packages)
-    find "${PROJECT_DIR}" -name "package.json" -not -path "*/node_modules/*" | while read pkgfile; do
-        node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('$pkgfile', 'utf8'));
-            let changed = false;
-            for (const s of ['dependencies','devDependencies','optionalDependencies','peerDependencies']) {
-                if (pkg[s] && pkg[s]['node-llama-cpp']) { delete pkg[s]['node-llama-cpp']; changed = true; }
-            }
-            if (changed) {
-                fs.writeFileSync('$pkgfile', JSON.stringify(pkg, null, 2) + '\\n');
-                console.log('  [✔] Stripped from: $pkgfile');
-            }
-        " 2>/dev/null || true
-    done
-
-    # 2. Handle pnpm build config (detect whitelist vs blacklist mode)
-    if [ -f "${PROJECT_DIR}/package.json" ]; then
-        node -e "
-            const fs = require('fs');
-            const pkgPath = '${PROJECT_DIR}/package.json';
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-            if (!pkg.pnpm) pkg.pnpm = {};
-            // If onlyBuiltDependencies exists (whitelist), remove llama from it
-            if (pkg.pnpm.onlyBuiltDependencies) {
-                pkg.pnpm.onlyBuiltDependencies = pkg.pnpm.onlyBuiltDependencies.filter(d => d !== 'node-llama-cpp');
-                console.log('  [✔] Removed from onlyBuiltDependencies whitelist');
-            } else {
-                // No whitelist, safe to use blacklist
-                if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
-                if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) {
-                    pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
-                }
-                console.log('  [✔] Added to neverBuiltDependencies blacklist');
-            }
-            // Override to local stub
-            if (!pkg.pnpm.overrides) pkg.pnpm.overrides = {};
-            pkg.pnpm.overrides['node-llama-cpp'] = 'link:./llama-stub';
-            if (!pkg.overrides) pkg.overrides = {};
-            pkg.overrides['node-llama-cpp'] = 'link:./llama-stub';
-            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');
-            console.log('  [✔] Injected pnpm config + overrides');
-        " 2>/dev/null || true
-    fi
-
-    # 3. Create a tiny stub package for the override to resolve to
-    mkdir -p "${PROJECT_DIR}/llama-stub"
-    echo '{"name":"node-llama-cpp","version":"0.0.0","description":"stub"}' > "${PROJECT_DIR}/llama-stub/package.json"
-    echo 'module.exports = {};' > "${PROJECT_DIR}/llama-stub/index.js"
-
-    # 4. Clean pnpm-lock.yaml of any llama references
-    if [ -f "${PROJECT_DIR}/pnpm-lock.yaml" ]; then
-        sed -i '/node-llama-cpp/d' "${PROJECT_DIR}/pnpm-lock.yaml" 2>/dev/null || true
-        echo "  [✔] Cleaned pnpm-lock.yaml"
-    fi
-
-    # 5. Create .npmrc to block scripts for node-llama-cpp
-    echo 'node-llama-cpp:ignore-scripts=true' >> "${PROJECT_DIR}/.npmrc"
-
-    # 6. Delete any existing node-llama-cpp installations
-    rm -rf "${PROJECT_DIR}/node_modules/node-llama-cpp" 2>/dev/null || true
-    rm -rf "${PROJECT_DIR}/node_modules/.pnpm/node-llama-cpp"* 2>/dev/null || true
-    find "${PROJECT_DIR}" -path "*/node_modules/node-llama-cpp" -type d -exec rm -rf {} + 2>/dev/null || true
-
-    echo "  ✔ node-llama-cpp fully stripped from ${PROJECT_DIR}"
-}
+# (llama removal hack deleted. using pure NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 environment variable)
 
 REPO_BASE="https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/builds"
 
@@ -244,9 +183,7 @@ cd /root
 # 1. OpenClaw
 if ! binary_install "openclaw"; then
     if [ ! -d "openclaw" ]; then git clone --depth 1 https://github.com/openclaw/openclaw.git; fi
-    strip_llama_cpp /root/openclaw
     cd openclaw && npm install --legacy-peer-deps --ignore-scripts=false && npm run build || true
-    # Remove llama artifacts that may have been pulled in post-install
     rm -rf /root/openclaw/node_modules/node-llama-cpp 2>/dev/null || true
 fi
 
@@ -254,7 +191,6 @@ fi
 cd /root
 if ! binary_install "mission-control"; then
     if [ ! -d "mission-control" ]; then git clone --depth 1 https://github.com/builderz-labs/mission-control.git; fi
-    strip_llama_cpp /root/mission-control
     cd mission-control && npm install --legacy-peer-deps && npm run build
 fi
 
@@ -262,7 +198,6 @@ fi
 cd /root
 if ! binary_install "perplexica"; then
     if [ ! -d "perplexica" ]; then git clone --depth 1 https://github.com/ItzCrazyKns/Perplexica.git; fi
-    strip_llama_cpp /root/perplexica
     cd perplexica && npm install --legacy-peer-deps && npm run build
 fi
 
@@ -309,48 +244,7 @@ echo "=========================================="
 echo "==== Starting Perfect Sync & Update   ===="
 echo "=========================================="
 
-# Nuclear removal of node-llama-cpp (handles monorepos + onlyBuiltDependencies conflicts)
-strip_llama_cpp() {
-    local PROJECT_DIR="$1"
-    # Strip from ALL package.json files (root + workspaces)
-    find "${PROJECT_DIR}" -name "package.json" -not -path "*/node_modules/*" | while read pkgfile; do
-        node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('$pkgfile', 'utf8'));
-            let c = false;
-            for (const s of ['dependencies','devDependencies','optionalDependencies','peerDependencies']) {
-                if (pkg[s] && pkg[s]['node-llama-cpp']) { delete pkg[s]['node-llama-cpp']; c = true; }
-            }
-            if (c) fs.writeFileSync('$pkgfile', JSON.stringify(pkg, null, 2) + '\\n');
-        " 2>/dev/null || true
-    done
-    # Handle pnpm config (detect whitelist vs blacklist)
-    node -e "
-        const fs = require('fs');
-        const p = '${PROJECT_DIR}/package.json';
-        const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
-        if (!pkg.pnpm) pkg.pnpm = {};
-        if (pkg.pnpm.onlyBuiltDependencies) {
-            pkg.pnpm.onlyBuiltDependencies = pkg.pnpm.onlyBuiltDependencies.filter(d => d !== 'node-llama-cpp');
-        } else {
-            if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
-            if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
-        }
-        if (!pkg.pnpm.overrides) pkg.pnpm.overrides = {};
-        pkg.pnpm.overrides['node-llama-cpp'] = 'link:./llama-stub';
-        fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\\n');
-    " 2>/dev/null || true
-    # Create stub package
-    mkdir -p "${PROJECT_DIR}/llama-stub"
-    echo '{"name":"node-llama-cpp","version":"0.0.0"}' > "${PROJECT_DIR}/llama-stub/package.json"
-    echo 'module.exports = {};' > "${PROJECT_DIR}/llama-stub/index.js"
-    # Clean lockfile + nuke installed dirs
-    sed -i '/node-llama-cpp/d' "${PROJECT_DIR}/pnpm-lock.yaml" 2>/dev/null || true
-    echo 'node-llama-cpp:ignore-scripts=true' >> "${PROJECT_DIR}/.npmrc" 2>/dev/null || true
-    rm -rf "${PROJECT_DIR}/node_modules/node-llama-cpp" 2>/dev/null || true
-    rm -rf "${PROJECT_DIR}/node_modules/.pnpm/node-llama-cpp"* 2>/dev/null || true
-    find "${PROJECT_DIR}" -path "*/node_modules/node-llama-cpp" -type d -exec rm -rf {} + 2>/dev/null || true
-}
+# (llama removal hack deleted. using pure NODE_LLAMA_CPP_SKIP_POSTINSTALL=1)
 
 # Update System Packages optionally
 # apt update && apt upgrade -y
@@ -359,7 +253,6 @@ echo "-> Syncing OpenClaw..."
 cd /root/openclaw
 git stash 2>/dev/null || true
 git pull
-strip_llama_cpp /root/openclaw
 npm install --legacy-peer-deps
 npm run build || true
 rm -rf /root/openclaw/node_modules/node-llama-cpp 2>/dev/null || true
@@ -368,7 +261,6 @@ echo "-> Syncing Mission Control..."
 cd /root/mission-control
 git stash 2>/dev/null || true
 git pull
-strip_llama_cpp /root/mission-control
 npm install --legacy-peer-deps
 npm run build
 
@@ -376,7 +268,6 @@ echo "-> Syncing Perplexica..."
 cd /root/perplexica
 git stash 2>/dev/null || true
 git pull
-strip_llama_cpp /root/perplexica
 npm install --legacy-peer-deps
 npm run build
 

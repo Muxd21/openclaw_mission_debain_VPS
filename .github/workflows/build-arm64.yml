@@ -18,88 +18,6 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      # ===== Create a reusable script that nukes node-llama-cpp from any project =====
-      - name: Create llama-strip helper script
-        run: |
-          cat > /tmp/strip-llama.sh << 'STRIP_SCRIPT'
-          #!/bin/bash
-          # Nuclear option: remove node-llama-cpp from EVERYWHERE in a project
-          PROJECT_DIR="${1:-/app}"
-          echo "=== Stripping node-llama-cpp from ${PROJECT_DIR} ==="
-
-          # 1. Remove node-llama-cpp from ALL package.json files (root + all workspaces)
-          find "${PROJECT_DIR}" -name "package.json" -not -path "*/node_modules/*" | while read pkg; do
-            node -e "
-              const fs = require('fs');
-              const pkg = JSON.parse(fs.readFileSync('${pkg}', 'utf8'));
-              let changed = false;
-              for (const s of ['dependencies','devDependencies','optionalDependencies','peerDependencies']) {
-                if (pkg[s] && pkg[s]['node-llama-cpp']) {
-                  delete pkg[s]['node-llama-cpp'];
-                  changed = true;
-                }
-              }
-              if (changed) {
-                fs.writeFileSync('${pkg}', JSON.stringify(pkg, null, 2) + '\n');
-                console.log('  [✔] Stripped from: ${pkg}');
-              }
-            " 2>/dev/null || true
-          done
-
-          # 2. Handle pnpm build config (onlyBuiltDependencies vs neverBuiltDependencies)
-          #    OpenClaw uses onlyBuiltDependencies (whitelist) — adding neverBuiltDependencies
-          #    conflicts with it. So we detect which mode is in use and act accordingly.
-          node -e "
-            const fs = require('fs');
-            const pkgPath = '${PROJECT_DIR}/package.json';
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-            if (!pkg.pnpm) pkg.pnpm = {};
-
-            // If onlyBuiltDependencies exists (whitelist mode), remove node-llama-cpp from it
-            if (pkg.pnpm.onlyBuiltDependencies) {
-              pkg.pnpm.onlyBuiltDependencies = pkg.pnpm.onlyBuiltDependencies.filter(d => d !== 'node-llama-cpp');
-              console.log('  [✔] Removed node-llama-cpp from onlyBuiltDependencies whitelist');
-            } else {
-              // No whitelist exists, safe to use blacklist
-              if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
-              if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) {
-                pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
-              }
-              console.log('  [✔] Added node-llama-cpp to neverBuiltDependencies blacklist');
-            }
-
-            // Add pnpm overrides to prevent resolution entirely
-            if (!pkg.pnpm.overrides) pkg.pnpm.overrides = {};
-            pkg.pnpm.overrides['node-llama-cpp'] = 'link:./llama-stub';
-
-            // npm overrides for non-pnpm projects
-            if (!pkg.overrides) pkg.overrides = {};
-            pkg.overrides['node-llama-cpp'] = 'link:./llama-stub';
-
-            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-            console.log('  [✔] Injected pnpm config + overrides');
-          " 2>/dev/null || true
-
-          # 3. Create a tiny stub package that node-llama-cpp overrides resolve to
-          mkdir -p "${PROJECT_DIR}/llama-stub"
-          echo '{"name":"node-llama-cpp","version":"0.0.0","description":"stub"}' > "${PROJECT_DIR}/llama-stub/package.json"
-          echo "module.exports = {};" > "${PROJECT_DIR}/llama-stub/index.js"
-          echo "  [✔] Created llama-stub dummy package"
-
-          # 4. Remove node-llama-cpp from pnpm-lock.yaml (if it exists)
-          if [ -f "${PROJECT_DIR}/pnpm-lock.yaml" ]; then
-            sed -i '/node-llama-cpp/d' "${PROJECT_DIR}/pnpm-lock.yaml" 2>/dev/null || true
-            echo "  [✔] Cleaned pnpm-lock.yaml"
-          fi
-
-          # 5. Create .npmrc to block scripts for node-llama-cpp
-          echo 'node-llama-cpp:ignore-scripts=true' >> "${PROJECT_DIR}/.npmrc"
-          echo "  [✔] Created .npmrc script block"
-
-          echo "=== node-llama-cpp fully stripped ==="
-          STRIP_SCRIPT
-          chmod +x /tmp/strip-llama.sh
-
       - name: Build Mission Control (ARM64)
         run: |
           mkdir -p artifacts
@@ -108,18 +26,17 @@ jobs:
           git config --global http.version HTTP/1.1
           # Attempt shallow clone first, fallback to full clone if shallow pack fails
           git clone --depth 1 https://github.com/builderz-labs/mission-control.git mc-build || git clone https://github.com/builderz-labs/mission-control.git mc-build
-          # Strip llama BEFORE docker (works on host since it's just JSON editing)
-          bash /tmp/strip-llama.sh "$(pwd)/mc-build"
           docker run --rm --privileged --platform linux/arm64 \
             -v $(pwd)/mc-build:/app \
             -w /app \
-            arm64v8/node:22-bullseye \
+            arm64v8/node:22-bookworm \
             /bin/bash -c '\
+              export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 && \
+              export NEXT_TELEMETRY_DISABLED=1 && \
               npm install -g pnpm && \
               npm install --legacy-peer-deps && \
               rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null; \
               npm run build && \
-              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null; \
               tar -czf mission-control-arm64.tar.gz .next node_modules package.json \
             '
           # Split into 50MB chunks to bypass GitHub limit
@@ -128,17 +45,16 @@ jobs:
       - name: Build OpenClaw (ARM64)
         run: |
           git clone --depth 1 https://github.com/openclaw/openclaw.git oc-build || git clone https://github.com/openclaw/openclaw.git oc-build
-          # Strip llama from ALL workspace package.json files BEFORE docker
-          bash /tmp/strip-llama.sh "$(pwd)/oc-build"
           docker run --rm --privileged --platform linux/arm64 \
             -v $(pwd)/oc-build:/app \
             -w /app \
-            arm64v8/node:22-bullseye \
+            arm64v8/node:22-bookworm \
             /bin/bash -c '\
+              export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 && \
               npm install -g pnpm && \
               pnpm install --no-frozen-lockfile && \
-              rm -rf node_modules/.pnpm/node-llama-cpp* 2>/dev/null; \
-              find /app -path "*/node_modules/node-llama-cpp" -type d -exec rm -rf {} + 2>/dev/null; \
+              rm -rf node_modules/.pnpm/node-llama-cpp* node_modules/node-llama-cpp 2>/dev/null || true; \
+              find /app -path "*/node_modules/node-llama-cpp" -type d -exec rm -rf {} + 2>/dev/null || true; \
               pnpm build || true && \
               tar -czf openclaw-arm64.tar.gz packages node_modules package.json \
             '
@@ -148,13 +64,12 @@ jobs:
       - name: Build Perplexica (ARM64)
         run: |
           git clone --depth 1 https://github.com/ItzCrazyKns/Perplexica.git px-build || git clone https://github.com/ItzCrazyKns/Perplexica.git px-build
-          # Strip llama BEFORE docker
-          bash /tmp/strip-llama.sh "$(pwd)/px-build"
           docker run --rm --privileged --platform linux/arm64 \
             -v $(pwd)/px-build:/app \
             -w /app \
-            arm64v8/node:22-bullseye \
+            arm64v8/node:22-bookworm \
             /bin/bash -c '\
+              export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 && \
               npm install --legacy-peer-deps && \
               rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null; \
               npm run build && \
@@ -162,6 +77,19 @@ jobs:
             '
           # Split into 50MB chunks
           split -b 50M px-build/perplexica-arm64.tar.gz ./artifacts/perplexica-arm64.tar.gz.part-
+
+      - name: Build Tailscale CLI (ARM64)
+        run: |
+          git clone --depth 1 https://github.com/anasfanani/tailscale-android-cli.git ts-build || git clone https://github.com/anasfanani/tailscale-android-cli.git ts-build
+          docker run --rm --privileged --platform linux/arm64 \
+            -v $(pwd)/ts-build:/app \
+            -w /app \
+            golang:1.23-bookworm \
+            /bin/bash -c '\
+              go build -o tailscale ./cmd/tailscale && \
+              tar -czf tailscale-arm64.tar.gz tailscale \
+            '
+          split -b 50M ts-build/tailscale-arm64.tar.gz ./artifacts/tailscale-arm64.tar.gz.part-
 
       - name: Deploy to Builds Branch
         uses: peaceiris/actions-gh-pages@v3
