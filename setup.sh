@@ -39,6 +39,10 @@ echo "=========================================="
 
 export DEBIAN_FRONTEND=noninteractive
 
+# Fix DNS resolution for Android PRoot
+echo "[*] Fixing DNS resolution..."
+echo "nameserver 1.1.1.1" > /etc/resolv.conf
+echo "nameserver 8.8.8.8" >> /etc/resolv.conf
 # Update and install basic tools
 echo "[*] Installing system dependencies..."
 apt update && apt upgrade -y
