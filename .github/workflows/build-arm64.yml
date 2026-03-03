@@ -20,18 +20,19 @@ jobs:
 
       - name: Build Mission Control (ARM64)
         run: |
+          mkdir -p artifacts
           git clone --depth 1 https://github.com/builderz-labs/mission-control.git mc-build
-          docker run --rm --privileged \
+          docker run --rm --privileged --platform linux/arm64 \
             -v $(pwd)/mc-build:/app \
             -w /app \
             arm64v8/node:22-bullseye \
             /bin/bash -c "npm install --legacy-peer-deps && npm run build && tar -czf ../mission-control-arm64.tar.gz .next node_modules package.json"
-          mv mission-control-arm64.tar.gz ./artifacts/ || (mkdir artifacts && mv mission-control-arm64.tar.gz ./artifacts/)
+          mv mission-control-arm64.tar.gz ./artifacts/
 
       - name: Build OpenClaw (ARM64)
         run: |
           git clone --depth 1 https://github.com/openclaw/openclaw.git oc-build
-          docker run --rm --privileged \
+          docker run --rm --privileged --platform linux/arm64 \
             -v $(pwd)/oc-build:/app \
             -w /app \
             arm64v8/node:22-bullseye \
