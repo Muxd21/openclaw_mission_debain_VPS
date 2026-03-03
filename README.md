@@ -13,6 +13,7 @@ pkg upgrade -y && pkg install wget -y && wget -qO- https://raw.githubusercontent
 - **Auto-Fix PRoot DNS:** No more connectivity issues inside Debian.
 - **VPS-Style SSH:** Connect via VS Code on Port `2222` (Password: `root`).
 - **NPM-Stabilized:** Uses `npm` instead of `pnpm` for ultra-stable ARM64 builds.
+- **Llama.cpp Bypass:** Aggressively strips `node-llama-cpp` from all monorepos, saving 10+ minutes of slow ARM compilation.
 - **Full Network Bridge:** Automatic `socat` bridging ensures Tailscale access to all apps.
 - **Production Performance:** Builds and starts in production mode for lower RAM usage.
 - **One-Command Sync:** Update all apps from GitHub with `/root/sync.sh`.
