@@ -106,7 +106,8 @@ echo "[*] Patching mission-control to avoid Turbopack errors in PRoot..."
 cd /root/mission-control
 # Remove --turbo from all scripts
 sed -i 's/--turbo//g' package.json
-# Force binding to 0.0.0.0 in scripts if explicitly set to 127.0.0.1
+# Force binding to 0.0.0.0 and port 3000 in scripts
+sed -i 's/next dev/next dev --hostname 0.0.0.0 --port 3000/g' package.json
 sed -i 's/--hostname 127.0.0.1/--hostname 0.0.0.0/g' package.json
 # Ensure environment variable to disable Turbopack is set
 export NEXT_TURBO=0
@@ -117,10 +118,13 @@ cd /root
 
 # Setup PM2 for process management
 echo "[*] Configuring PM2 to run both applications (Ports 3000 and 3001)..."
-pm2 start "pnpm gateway:watch --port 3001" --name openclaw --cwd /root/openclaw || pm2 start "tsx ./packages/cli/src/index.ts gateway --port 3001" --name openclaw --cwd /root/openclaw
 
-# Mission Control runs on 3000 - Force 0.0.0.0 and disable turbo
-pm2 start "pnpm dev --port 3000 -- --hostname 0.0.0.0" --name mission-control --cwd /root/mission-control --env NEXT_TURBO=0,HOST=0.0.0.0,NEXT_TELEMETRY_DISABLED=1
+# OpenClaw: use standard entry point/script
+pm2 start "pnpm gateway --port 3001" --name openclaw --cwd /root/openclaw || \
+pm2 start "tsx packages/cli/index.ts gateway --port 3001" --name openclaw --cwd /root/openclaw
+
+# Mission Control: use simple dev command as we patched package.json
+pm2 start "pnpm dev" --name mission-control --cwd /root/mission-control --env NEXT_TURBO=0,HOST=0.0.0.0,NEXT_TELEMETRY_DISABLED=1
 
 # Save PM2 state
 pm2 save
