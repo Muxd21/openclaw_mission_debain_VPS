@@ -8,27 +8,6 @@ on:
 permissions:
   contents: write
 
-env:
-  NODE_LLAMA_CPP_SKIP_POSTINSTALL: "1"
-
-  # Reusable inline script to strip node-llama-cpp from any package.json
-  # This runs inside the Docker container before npm/pnpm install
-  STRIP_LLAMA: |
-    node -e "
-      const fs = require('fs');
-      const pkg = JSON.parse(fs.readFileSync('/app/package.json', 'utf8'));
-      let changed = false;
-      for (const s of ['dependencies','devDependencies','optionalDependencies','peerDependencies']) {
-        if (pkg[s] && pkg[s]['node-llama-cpp']) { delete pkg[s]['node-llama-cpp']; changed = true; }
-      }
-      if (changed) {
-        fs.writeFileSync('/app/package.json', JSON.stringify(pkg, null, 2) + '\n');
-        console.log('[✔] Stripped node-llama-cpp from package.json');
-      } else {
-        console.log('[i] node-llama-cpp not found in package.json');
-      }
-    "
-
 jobs:
   build-apps:
     runs-on: ubuntu-latest
@@ -39,60 +18,126 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
+      # ===== Create a reusable script that nukes node-llama-cpp from any project =====
+      - name: Create llama-strip helper script
+        run: |
+          cat > /tmp/strip-llama.sh << 'STRIP_SCRIPT'
+          #!/bin/bash
+          # Nuclear option: remove node-llama-cpp from EVERYWHERE in a project
+          PROJECT_DIR="${1:-/app}"
+          echo "=== Stripping node-llama-cpp from ${PROJECT_DIR} ==="
+
+          # 1. Remove node-llama-cpp from ALL package.json files (root + all workspaces)
+          find "${PROJECT_DIR}" -name "package.json" -not -path "*/node_modules/*" | while read pkg; do
+            node -e "
+              const fs = require('fs');
+              const pkg = JSON.parse(fs.readFileSync('${pkg}', 'utf8'));
+              let changed = false;
+              for (const s of ['dependencies','devDependencies','optionalDependencies','peerDependencies']) {
+                if (pkg[s] && pkg[s]['node-llama-cpp']) {
+                  delete pkg[s]['node-llama-cpp'];
+                  changed = true;
+                }
+              }
+              if (changed) {
+                fs.writeFileSync('${pkg}', JSON.stringify(pkg, null, 2) + '\n');
+                console.log('  [✔] Stripped from: ${pkg}');
+              }
+            " 2>/dev/null || true
+          done
+
+          # 2. Inject pnpm.neverBuiltDependencies into root package.json (blocks postinstall even for transitive deps)
+          node -e "
+            const fs = require('fs');
+            const pkgPath = '${PROJECT_DIR}/package.json';
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            if (!pkg.pnpm) pkg.pnpm = {};
+            if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
+            if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) {
+              pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
+            }
+            // Also add pnpm overrides to substitute a dummy for any transitive resolution
+            if (!pkg.pnpm.overrides) pkg.pnpm.overrides = {};
+            pkg.pnpm.overrides['node-llama-cpp'] = '0.0.0-skip';
+            // npm overrides for non-pnpm projects
+            if (!pkg.overrides) pkg.overrides = {};
+            pkg.overrides['node-llama-cpp'] = '0.0.0-skip';
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+            console.log('  [✔] Injected neverBuiltDependencies + overrides');
+          " 2>/dev/null || true
+
+          # 3. Remove node-llama-cpp from pnpm-lock.yaml (if it exists)
+          if [ -f "${PROJECT_DIR}/pnpm-lock.yaml" ]; then
+            sed -i '/node-llama-cpp/d' "${PROJECT_DIR}/pnpm-lock.yaml" 2>/dev/null || true
+            echo "  [✔] Cleaned pnpm-lock.yaml"
+          fi
+
+          # 4. Create .npmrc to block scripts for node-llama-cpp
+          cat >> "${PROJECT_DIR}/.npmrc" << 'NPMRC'
+          node-llama-cpp:ignore-scripts=true
+          NPMRC
+          echo "  [✔] Created .npmrc script block"
+
+          echo "=== node-llama-cpp fully stripped ==="
+          STRIP_SCRIPT
+          chmod +x /tmp/strip-llama.sh
+
       - name: Build Mission Control (ARM64)
         run: |
           mkdir -p artifacts
           git clone --depth 1 https://github.com/builderz-labs/mission-control.git mc-build
+          # Strip llama BEFORE docker (works on host since it's just JSON editing)
+          bash /tmp/strip-llama.sh "$(pwd)/mc-build"
           docker run --rm --privileged --platform linux/arm64 \
-            -e NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 \
             -v $(pwd)/mc-build:/app \
             -w /app \
             arm64v8/node:22-bullseye \
-            /bin/bash -c "
-              ${STRIP_LLAMA}
+            /bin/bash -c '\
               npm install -g pnpm && \
               npm install --legacy-peer-deps && \
-              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null || true && \
+              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null; \
               npm run build && \
-              tar -czf mission-control-arm64.tar.gz .next node_modules package.json
-            "
+              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null; \
+              tar -czf mission-control-arm64.tar.gz .next node_modules package.json \
+            '
           # Split into 50MB chunks to bypass GitHub limit
           split -b 50M mc-build/mission-control-arm64.tar.gz ./artifacts/mission-control-arm64.tar.gz.part-
 
       - name: Build OpenClaw (ARM64)
         run: |
           git clone --depth 1 https://github.com/openclaw/openclaw.git oc-build
+          # Strip llama from ALL workspace package.json files BEFORE docker
+          bash /tmp/strip-llama.sh "$(pwd)/oc-build"
           docker run --rm --privileged --platform linux/arm64 \
-            -e NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 \
             -v $(pwd)/oc-build:/app \
             -w /app \
             arm64v8/node:22-bullseye \
-            /bin/bash -c "
-              ${STRIP_LLAMA}
+            /bin/bash -c '\
               npm install -g pnpm && \
               pnpm install --no-frozen-lockfile && \
-              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null || true && \
+              rm -rf node_modules/.pnpm/node-llama-cpp* 2>/dev/null; \
+              find /app -path "*/node_modules/node-llama-cpp" -type d -exec rm -rf {} + 2>/dev/null; \
               pnpm build || true && \
-              tar -czf openclaw-arm64.tar.gz packages node_modules package.json
-            "
+              tar -czf openclaw-arm64.tar.gz packages node_modules package.json \
+            '
           # Split into 50MB chunks
           split -b 50M oc-build/openclaw-arm64.tar.gz ./artifacts/openclaw-arm64.tar.gz.part-
 
       - name: Build Perplexica (ARM64)
         run: |
           git clone --depth 1 https://github.com/ItzCrazyKns/Perplexica.git px-build
+          # Strip llama BEFORE docker
+          bash /tmp/strip-llama.sh "$(pwd)/px-build"
           docker run --rm --privileged --platform linux/arm64 \
-            -e NODE_LLAMA_CPP_SKIP_POSTINSTALL=1 \
             -v $(pwd)/px-build:/app \
             -w /app \
             arm64v8/node:22-bullseye \
-            /bin/bash -c "
-              ${STRIP_LLAMA}
+            /bin/bash -c '\
               npm install --legacy-peer-deps && \
-              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null || true && \
+              rm -rf node_modules/node-llama-cpp node_modules/.pnpm/node-llama-cpp* 2>/dev/null; \
               npm run build && \
-              tar -czf perplexica-arm64.tar.gz .next node_modules package.json dist
-            "
+              tar -czf perplexica-arm64.tar.gz .next node_modules package.json dist \
+            '
           # Split into 50MB chunks
           split -b 50M px-build/perplexica-arm64.tar.gz ./artifacts/perplexica-arm64.tar.gz.part-
 

@@ -128,46 +128,64 @@ export NODE_OPTIONS="--require /root/.node_bypass.js"
 export NODE_LLAMA_CPP_SKIP_POSTINSTALL=1
 
 # ===== STRIP LLAMA.CPP FUNCTION =====
-# Removes node-llama-cpp from any project to avoid the extremely slow
-# native build on ARM/mobile. Designed to survive git pull / future updates.
+# Nuclear removal of node-llama-cpp from any project (including pnpm monorepos).
+# Handles transitive deps, workspace sub-packages, lockfiles, and postinstall scripts.
 strip_llama_cpp() {
     local PROJECT_DIR="$1"
     echo "[🔧] Stripping node-llama-cpp from ${PROJECT_DIR}..."
 
-    # 1. Remove node-llama-cpp from all dependency sections in package.json
-    if [ -f "${PROJECT_DIR}/package.json" ]; then
-        # Use node itself for reliable JSON manipulation
+    # 1. Remove node-llama-cpp from ALL package.json files (root + all workspace packages)
+    find "${PROJECT_DIR}" -name "package.json" -not -path "*/node_modules/*" | while read pkgfile; do
         node -e "
             const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('${PROJECT_DIR}/package.json', 'utf8'));
+            const pkg = JSON.parse(fs.readFileSync('$pkgfile', 'utf8'));
             let changed = false;
-            for (const section of ['dependencies','devDependencies','optionalDependencies','peerDependencies']) {
-                if (pkg[section] && pkg[section]['node-llama-cpp']) {
-                    delete pkg[section]['node-llama-cpp'];
-                    changed = true;
-                    console.log('  Removed node-llama-cpp from ' + section);
-                }
+            for (const s of ['dependencies','devDependencies','optionalDependencies','peerDependencies']) {
+                if (pkg[s] && pkg[s]['node-llama-cpp']) { delete pkg[s]['node-llama-cpp']; changed = true; }
             }
             if (changed) {
-                fs.writeFileSync('${PROJECT_DIR}/package.json', JSON.stringify(pkg, null, 2) + '\\n');
-                console.log('  ✔ package.json patched');
-            } else {
-                console.log('  (node-llama-cpp not found in package.json, skipping)');
+                fs.writeFileSync('$pkgfile', JSON.stringify(pkg, null, 2) + '\\n');
+                console.log('  [✔] Stripped from: $pkgfile');
             }
-        "
+        " 2>/dev/null || true
+    done
+
+    # 2. Inject pnpm.neverBuiltDependencies + overrides into root package.json
+    #    This blocks postinstall even if node-llama-cpp comes in as a transitive dep
+    if [ -f "${PROJECT_DIR}/package.json" ]; then
+        node -e "
+            const fs = require('fs');
+            const pkgPath = '${PROJECT_DIR}/package.json';
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            if (!pkg.pnpm) pkg.pnpm = {};
+            if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
+            if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) {
+                pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
+            }
+            if (!pkg.pnpm.overrides) pkg.pnpm.overrides = {};
+            pkg.pnpm.overrides['node-llama-cpp'] = '0.0.0-skip';
+            if (!pkg.overrides) pkg.overrides = {};
+            pkg.overrides['node-llama-cpp'] = '0.0.0-skip';
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');
+            console.log('  [✔] Injected neverBuiltDependencies + overrides');
+        " 2>/dev/null || true
     fi
 
-    # 2. Create .npmrc to block postinstall scripts from llama if it sneaks in via transitive deps
-    cat > "${PROJECT_DIR}/.npmrc" << 'NPMRC'
-ignore-scripts=false
-node-llama-cpp:ignore-scripts=true
-NPMRC
+    # 3. Clean pnpm-lock.yaml of any llama references
+    if [ -f "${PROJECT_DIR}/pnpm-lock.yaml" ]; then
+        sed -i '/node-llama-cpp/d' "${PROJECT_DIR}/pnpm-lock.yaml" 2>/dev/null || true
+        echo "  [✔] Cleaned pnpm-lock.yaml"
+    fi
 
-    # 3. Delete any existing node-llama-cpp installation
+    # 4. Create .npmrc to block scripts for node-llama-cpp
+    echo 'node-llama-cpp:ignore-scripts=true' >> "${PROJECT_DIR}/.npmrc"
+
+    # 5. Delete any existing node-llama-cpp installations
     rm -rf "${PROJECT_DIR}/node_modules/node-llama-cpp" 2>/dev/null || true
     rm -rf "${PROJECT_DIR}/node_modules/.pnpm/node-llama-cpp"* 2>/dev/null || true
+    find "${PROJECT_DIR}" -path "*/node_modules/node-llama-cpp" -type d -exec rm -rf {} + 2>/dev/null || true
 
-    echo "  ✔ node-llama-cpp stripped from ${PROJECT_DIR}"
+    echo "  ✔ node-llama-cpp fully stripped from ${PROJECT_DIR}"
 }
 
 REPO_BASE="https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/builds"
@@ -278,21 +296,39 @@ echo "=========================================="
 echo "==== Starting Perfect Sync & Update   ===="
 echo "=========================================="
 
-# Reusable function to strip node-llama-cpp (survives git pull)
+# Nuclear removal of node-llama-cpp (handles monorepos + transitive deps)
 strip_llama_cpp() {
     local PROJECT_DIR="$1"
-    if [ -f "${PROJECT_DIR}/package.json" ]; then
+    # Strip from ALL package.json files (root + workspaces)
+    find "${PROJECT_DIR}" -name "package.json" -not -path "*/node_modules/*" | while read pkgfile; do
         node -e "
             const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('${PROJECT_DIR}/package.json', 'utf8'));
+            const pkg = JSON.parse(fs.readFileSync('$pkgfile', 'utf8'));
+            let c = false;
             for (const s of ['dependencies','devDependencies','optionalDependencies','peerDependencies']) {
-                if (pkg[s] && pkg[s]['node-llama-cpp']) { delete pkg[s]['node-llama-cpp']; }
+                if (pkg[s] && pkg[s]['node-llama-cpp']) { delete pkg[s]['node-llama-cpp']; c = true; }
             }
-            fs.writeFileSync('${PROJECT_DIR}/package.json', JSON.stringify(pkg, null, 2) + '\\n');
+            if (c) fs.writeFileSync('$pkgfile', JSON.stringify(pkg, null, 2) + '\\n');
         " 2>/dev/null || true
-    fi
+    done
+    # Inject pnpm.neverBuiltDependencies + overrides
+    node -e "
+        const fs = require('fs');
+        const p = '${PROJECT_DIR}/package.json';
+        const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (!pkg.pnpm) pkg.pnpm = {};
+        if (!pkg.pnpm.neverBuiltDependencies) pkg.pnpm.neverBuiltDependencies = [];
+        if (!pkg.pnpm.neverBuiltDependencies.includes('node-llama-cpp')) pkg.pnpm.neverBuiltDependencies.push('node-llama-cpp');
+        if (!pkg.pnpm.overrides) pkg.pnpm.overrides = {};
+        pkg.pnpm.overrides['node-llama-cpp'] = '0.0.0-skip';
+        fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\\n');
+    " 2>/dev/null || true
+    # Clean lockfile + nuke installed dirs
+    sed -i '/node-llama-cpp/d' "${PROJECT_DIR}/pnpm-lock.yaml" 2>/dev/null || true
+    echo 'node-llama-cpp:ignore-scripts=true' >> "${PROJECT_DIR}/.npmrc" 2>/dev/null || true
     rm -rf "${PROJECT_DIR}/node_modules/node-llama-cpp" 2>/dev/null || true
     rm -rf "${PROJECT_DIR}/node_modules/.pnpm/node-llama-cpp"* 2>/dev/null || true
+    find "${PROJECT_DIR}" -path "*/node_modules/node-llama-cpp" -type d -exec rm -rf {} + 2>/dev/null || true
 }
 
 # Update System Packages optionally
