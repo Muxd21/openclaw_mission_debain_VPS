@@ -12,9 +12,11 @@ pkg upgrade -y && pkg install wget -y && wget -qO- https://raw.githubusercontent
 ## 🛠️ Included Features
 - **Auto-Fix PRoot DNS:** No more connectivity issues inside Debian.
 - **VPS-Style SSH:** Connect via VS Code on Port `2222` (Password: `root`).
-- **NPM-Stabilized:** Uses `npm` instead of `pnpm` to bypass PRoot symlink errors.
-- **Production Performance:** Runs in production mode for lower RAM usage and better stability.
-- **One-Command Sync:** Update both apps from GitHub with `/root/sync.sh`.
+- **NPM-Stabilized:** Uses `npm` instead of `pnpm` for ultra-stable ARM64 builds.
+- **Full Network Bridge:** Automatic `socat` bridging ensures Tailscale access to all apps.
+- **Production Performance:** Builds and starts in production mode for lower RAM usage.
+- **One-Command Sync:** Update all apps from GitHub with `/root/sync.sh`.
+- **Perplexica Included:** High-performance AI search engine pre-installed.
 
 ## 📂 Project Shortcuts (Inside Debian)
 - `Enter Debian`: `proot-distro login debian`
@@ -22,6 +24,7 @@ pkg upgrade -y && pkg install wget -y && wget -qO- https://raw.githubusercontent
 - `Sync & Update`: `/root/sync.sh`
 - `Mission Control`: `http://<PHONE_IP>:3000`
 - `OpenClaw`: `http://<PHONE_IP>:3001`
+- `Perplexica`: `http://<PHONE_IP>:3011`
 
 ---
 

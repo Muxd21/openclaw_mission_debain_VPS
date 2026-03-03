@@ -41,6 +41,17 @@ jobs:
           # Split into 50MB chunks
           split -b 50M oc-build/openclaw-arm64.tar.gz ./artifacts/openclaw-arm64.tar.gz.part-
 
+      - name: Build Perplexica (ARM64)
+        run: |
+          git clone --depth 1 https://github.com/ItzCrazyKns/Perplexica.git px-build
+          docker run --rm --privileged --platform linux/arm64 \
+            -v $(pwd)/px-build:/app \
+            -w /app \
+            arm64v8/node:22-bullseye \
+            /bin/bash -c "npm install --legacy-peer-deps && npm run build && tar -czf perplexica-arm64.tar.gz .next node_modules package.json dist"
+          # Split into 50MB chunks
+          split -b 50M px-build/perplexica-arm64.tar.gz ./artifacts/perplexica-arm64.tar.gz.part-
+
       - name: Deploy to Builds Branch
         uses: peaceiris/actions-gh-pages@v3
         with:

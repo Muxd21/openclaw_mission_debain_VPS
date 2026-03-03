@@ -15,9 +15,20 @@ if [ ! -f "/.dockerenv" ] && [ -z "$PROOT_PID" ] && [ "$(id -u)" != "0" ]; then
     # Ensure Termux packages are fully upgraded to fix library linkage errors (like curl SSL issues)
     pkg upgrade -y
     
-    # Install proot-distro & essential tools
-    pkg install proot-distro wget curl openssh -y
+    # Install proot-distro, essential tools & socat for bridging
+    pkg install proot-distro wget curl openssh socat -y
     
+    # Auto-restart bridges on Termux host
+    setup_bridge() {
+        pkill socat || true
+        socat TCP4-LISTEN:2222,reuseaddr,fork TCP4:127.0.0.1:2222 &
+        socat TCP4-LISTEN:3000,reuseaddr,fork TCP4:127.0.0.1:3000 &
+        socat TCP4-LISTEN:3001,reuseaddr,fork TCP4:127.0.0.1:3001 &
+        socat TCP4-LISTEN:3010,reuseaddr,fork TCP4:127.0.0.1:3010 &
+        socat TCP4-LISTEN:3011,reuseaddr,fork TCP4:127.0.0.1:3011 &
+    }
+    setup_bridge
+
     # Install Debian 12
     echo "[*] Installing Debian 12 PRoot..."
     if [ ! -d "$PREFIX/var/lib/proot-distro/installed-rootfs/debian" ]; then
@@ -99,6 +110,8 @@ binary_install() {
         # Reconstruct and extract
         echo "[*] Reconstructing archive..."
         cat ${APP_NAME}-arm64.tar.gz.part-* > "${APP_NAME}.tar.gz"
+        # CLEAN-UP BEFORE EXTRACT TO AVOID SYMLINK ERRORS
+        rm -rf node_modules .next dist 2>/dev/null || true
         tar -xzf "${APP_NAME}.tar.gz"
         rm "${APP_NAME}.tar.gz" ${APP_NAME}-arm64.tar.gz.part-*
         return 0
@@ -124,6 +137,17 @@ if ! binary_install "mission-control"; then
     cd mission-control && npm install --legacy-peer-deps && npm run build
 fi
 
+# 3. Perplexica
+cd /root
+if ! binary_install "perplexica"; then
+    if [ ! -d "perplexica" ]; then git clone --depth 1 https://github.com/ItzCrazyKns/Perplexica.git; fi
+    cd perplexica && npm install --legacy-peer-deps && npm run build
+fi
+
+# 4. Meilisearch (Required for Perplexica)
+echo "[*] Installing Meilisearch..."
+apt install -y meilisearch || (wget https://github.com/meilisearch/meilisearch/releases/download/v1.12.1/meilisearch-linux-arm64 -O /usr/local/bin/meilisearch && chmod +x /usr/local/bin/meilisearch)
+
 # --- PRoot Specific Fixes ---
 echo "[*] Finalizing configuration..."
 # Always ensure binding 0.0.0.0 is enforced in package.json
@@ -133,8 +157,24 @@ sed -i 's/next start/next start -H 0.0.0.0/g' /root/mission-control/package.json
 # Setup PM2 for production (More stable than dev in PRoot)
 echo "[*] Starting services with PM2..."
 pm2 delete all 2>/dev/null || true
+
+# Mission Control (Port 3000)
 pm2 start "npm run start -- --port 3000" --name mission-control --cwd /root/mission-control --env HOST=0.0.0.0,NEXT_TURBO=0
+
+# OpenClaw (Port 3001)
 pm2 start "npm run gateway -- --port 3001" --name openclaw --cwd /root/openclaw --env HOST=0.0.0.0
+
+# Perplexica Backend (Port 3010) & Frontend (Port 3011)
+cd /root/perplexica
+if [ ! -f ".json" ]; then
+    echo '{"PORT": 3010, "MEILI_HOST": "http://127.0.0.1:7700"}' > config.json
+fi
+pm2 start "npm run start:backend" --name px-backend --cwd /root/perplexica
+pm2 start "npm run start:frontend" --name px-frontend --cwd /root/perplexica --env PORT=3011
+
+# Meilisearch
+pm2 start "meilisearch --http-addr 127.0.0.1:7700" --name meilisearch
+
 pm2 save
 
 # Create the Perfect One-Command Sync Script
@@ -160,6 +200,12 @@ git pull
 npm install --legacy-peer-deps
 npm run build
 
+echo "-> Syncing Perplexica..."
+cd /root/perplexica
+git pull
+npm install --legacy-peer-deps
+npm run build
+
 echo "-> Restarting PM2 Services..."
 pm2 restart all
 pm2 save
@@ -175,6 +221,7 @@ cat << 'STARTUP' > /root/start.sh
 /usr/sbin/sshd
 pm2 resurrect
 echo "VPS Services Successfully Started."
+echo "NOTE: If you cannot connect, run 'setup_bridge' in your Termux Host."
 STARTUP
 chmod +x /root/start.sh
 
@@ -213,6 +260,7 @@ EOF
     echo "APPS ACCESS:"
     echo "  Mission Control : http://<YOUR_PHONE_TAILSCALE_IP>:3000"
     echo "  OpenClaw        : http://<YOUR_PHONE_TAILSCALE_IP>:3001"
+    echo "  Perplexica      : http://<YOUR_PHONE_TAILSCALE_IP>:3011"
     echo "=========================================="
     exit 0
 fi
