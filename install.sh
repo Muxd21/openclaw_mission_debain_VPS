@@ -35,9 +35,16 @@ echo -e "  ${GREEN}✓${NC} npm $(npm --version)"
 echo -e "  ${GREEN}✓${NC} git installed"
 echo -e "  ${GREEN}✓${NC} proot-distro installed"
 
-# Install openclaw-termux from npm
 echo -e "\n${BLUE}[2/2]${NC} Installing openclaw-termux..."
-npm install -g https://github.com/Muxd21/openclaw_mission_debain_VPS.git
+
+# Fix for npm uv_cwd error in Termux: Install from a local clone
+cd "$HOME"
+if [ -d "$HOME/.openclaw-installer" ]; then
+    rm -rf "$HOME/.openclaw-installer"
+fi
+git clone https://github.com/Muxd21/openclaw_mission_debain_VPS.git "$HOME/.openclaw-installer"
+cd "$HOME/.openclaw-installer"
+npm install -g .
 
 echo -e "\n${GREEN}═══════════════════════════════════════════${NC}"
 echo -e "${GREEN}Installation complete!${NC}"
