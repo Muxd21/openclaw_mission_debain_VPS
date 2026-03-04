@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # OpenClaw-Termux Installer
-# One-liner: curl -fsSL https://raw.githubusercontent.com/mithun50/openclaw-termux/main/install.sh | bash
+# One-liner: curl -fsSL https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/main/install.sh | bash
 #
 
 set -e
@@ -37,7 +37,7 @@ echo -e "  ${GREEN}✓${NC} proot-distro installed"
 
 # Install openclaw-termux from npm
 echo -e "\n${BLUE}[2/2]${NC} Installing openclaw-termux..."
-npm install -g openclaw-termux
+npm install -g https://github.com/Muxd21/openclaw_mission_debain_VPS.git
 
 echo -e "\n${GREEN}═══════════════════════════════════════════${NC}"
 echo -e "${GREEN}Installation complete!${NC}"

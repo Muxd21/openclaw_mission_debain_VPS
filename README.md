@@ -1,13 +1,13 @@
 # OpenClaw
 
-[![Download APK](https://img.shields.io/badge/Download-APK-green?style=for-the-badge&logo=android)](https://github.com/mithun50/openclaw-termux/releases/latest)
-[![Build Flutter APK & AAB](https://github.com/mithun50/openclaw-termux/actions/workflows/flutter-build.yml/badge.svg)](https://github.com/mithun50/openclaw-termux/actions/workflows/flutter-build.yml)
+[![Download APK](https://img.shields.io/badge/Download-APK-green?style=for-the-badge&logo=android)](https://github.com/Muxd21/openclaw_mission_debain_VPS/releases/latest)
+[![Build Flutter APK & AAB](https://github.com/Muxd21/openclaw_mission_debain_VPS/actions/workflows/flutter-build.yml/badge.svg)](https://github.com/Muxd21/openclaw_mission_debain_VPS/actions/workflows/flutter-build.yml)
 [![npm version](https://img.shields.io/npm/v/openclaw-termux?color=blue&label=npm)](https://www.npmjs.com/package/openclaw-termux)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-22-green?logo=node.js)](https://nodejs.org/)
 [![Android](https://img.shields.io/badge/Android-10%2B-brightgreen?logo=android)](https://www.android.com/)
 [![Flutter](https://img.shields.io/badge/Flutter-3.24-02569B?logo=flutter)](https://flutter.dev/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/mithun50/openclaw-termux/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Muxd21/openclaw_mission_debain_VPS/pulls)
 
 <p align="center">
   <img src="assets/ic_launcher.png" alt="OpenClaw App Mockup" width="700"/>
@@ -112,7 +112,7 @@ The gateway's `openclaw.json` is automatically patched before startup to clear `
 
 ### Flutter App (Recommended)
 
-1. Download the latest APK from [Releases](https://github.com/mithun50/openclaw-termux/releases)
+1. Download the latest APK from [Releases](https://github.com/Muxd21/openclaw_mission_debain_VPS/releases)
 2. Install the APK on your Android device
 3. Open the app and tap **Begin Setup**
 4. After setup completes, optionally install **Go** or **Homebrew** from the package cards
@@ -122,7 +122,7 @@ The gateway's `openclaw.json` is automatically patched before startup to clear `
 Or build from source:
 
 ```bash
-git clone https://github.com/mithun50/openclaw-termux.git
+git clone https://github.com/Muxd21/openclaw_mission_debain_VPS.git
 cd openclaw-termux/flutter_app
 flutter build apk --release
 ```
@@ -132,7 +132,7 @@ flutter build apk --release
 #### One-liner (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mithun50/openclaw-termux/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Muxd21/openclaw_mission_debain_VPS/main/install.sh | bash
 ```
 
 #### Or via npm
@@ -431,7 +431,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 **Mithun Gowda B** | [NextGenX](https://play.google.com/store/apps/dev?id=8262374975871504599)
 
-- GitHub: [@mithun50](https://github.com/mithun50)
+- GitHub: [@Muxd21](https://github.com/Muxd21)
 - Email: [mithungowda.b7411@gmail.com](mailto:mithungowda.b7411@gmail.com)
 - Instagram: [@nexgenxplorer_nxg](https://www.instagram.com/nexgenxplorer_nxg)
 - YouTube: [@nexgenxplorer](https://youtube.com/@nexgenxplorer?si=UG-wBC8UIyeT4bbw)
@@ -447,5 +447,5 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ---
 
 <p align="center">
-  Made with &#10084;&#65039; for the Android community by <a href="https://github.com/mithun50">Mithun Gowda B</a> | <b>NextGenX</b>
+  Made with &#10084;&#65039; for the Android community by <a href="https://github.com/Muxd21">Muxd21</a> | <b>NextGenX</b>
 </p>
