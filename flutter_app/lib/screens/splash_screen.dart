@@ -1,0 +1,153 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../constants.dart';
+import '../services/native_bridge.dart';
+import '../services/preferences_service.dart';
+import 'setup_wizard_screen.dart';
+import 'dashboard_screen.dart';
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  String _status = 'Loading...';
+  late final AnimationController _fadeController;
+  late final Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeOut,
+    );
+    _fadeController.forward();
+    _checkAndRoute();
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkAndRoute() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    try {
+      setState(() => _status = 'Checking setup status...');
+
+      // Ensure directories and resolv.conf exist on every app open.
+      // Android may clear the files directory during update or reinstall (#40).
+      try { await NativeBridge.setupDirs(); } catch (_) {}
+      try { await NativeBridge.writeResolv(); } catch (_) {}
+
+      // Direct Dart fallback: create resolv.conf if native calls failed (#40).
+      try {
+        final filesDir = await NativeBridge.getFilesDir();
+        const resolvContent = 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n';
+        final configDir = '$filesDir/config';
+        final resolvFile = File('$configDir/resolv.conf');
+        if (!resolvFile.existsSync()) {
+          Directory(configDir).createSync(recursive: true);
+          resolvFile.writeAsStringSync(resolvContent);
+        }
+        // Also write into rootfs /etc/ so DNS works even if bind-mount fails
+        final rootfsResolv = File('$filesDir/rootfs/ubuntu/etc/resolv.conf');
+        if (!rootfsResolv.existsSync()) {
+          rootfsResolv.parent.createSync(recursive: true);
+          rootfsResolv.writeAsStringSync(resolvContent);
+        }
+      } catch (_) {}
+
+      final prefs = PreferencesService();
+      await prefs.init();
+
+      bool setupComplete;
+      try {
+        setupComplete = await NativeBridge.isBootstrapComplete();
+      } catch (_) {
+        setupComplete = false;
+      }
+
+      if (!mounted) return;
+
+      if (setupComplete) {
+        prefs.setupComplete = true;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const SetupWizardScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _status = 'Error: $e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset(
+                'assets/ic_launcher.png',
+                width: 80,
+                height: 80,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'OpenClaw',
+                style: GoogleFonts.inter(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'AI Gateway for Android',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'by ${AppConstants.authorName} | ${AppConstants.orgName}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 32),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                _status,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
